@@ -176,6 +176,16 @@ table th[scope='col']:first-child {
   color: var(--loss);
 }
 
+.tx-row--editing {
+  background: color-mix(in srgb, var(--brass) 10%, transparent);
+}
+
+.tx-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
 .icon-button {
   background: none;
   border: 1px solid var(--rule);
@@ -473,6 +483,12 @@ select:focus-visible {
   border-radius: 6px;
   padding: 10px 20px;
   font-weight: 500;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 /* ---------- Settings ---------- */

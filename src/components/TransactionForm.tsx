@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { searchSymbol, type SymbolMatch } from '../data/alphaVantage'
 import { computePositions } from '../domain/portfolio'
 import type { Instrument, InstrumentKind, Transaction, TransactionType } from '../domain/types'
@@ -9,16 +9,23 @@ interface TransactionFormProps {
   instruments: Record<string, Instrument>
   transactions: Transaction[]
   apiKey: string | undefined
+  /** When set, the form edits this transaction instead of adding a new one. */
+  editingTransaction?: Transaction
   onAdd: (transaction: Transaction) => void
+  onUpdate: (transaction: Transaction) => void
   onUpsertInstrument: (symbol: string, instrument: Instrument) => void
+  onCancelEdit?: () => void
 }
 
 export function TransactionForm({
   instruments,
   transactions,
   apiKey,
+  editingTransaction,
   onAdd,
+  onUpdate,
   onUpsertInstrument,
+  onCancelEdit,
 }: TransactionFormProps) {
   const formId = useId()
   const [type, setType] = useState<TransactionType>('buy')
@@ -30,6 +37,21 @@ export function TransactionForm({
   const [price, setPrice] = useState('')
   const [fees, setFees] = useState('0')
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!editingTransaction) return
+    setType(editingTransaction.type)
+    setSymbol(editingTransaction.symbol)
+    setName(instruments[editingTransaction.symbol]?.name ?? '')
+    setKind(instruments[editingTransaction.symbol]?.kind ?? 'stock')
+    setDate(editingTransaction.date)
+    setQuantity(String(editingTransaction.quantity))
+    setPrice(String(editingTransaction.price))
+    setFees(String(editingTransaction.fees))
+    setError(null)
+    // Only the identity of the transaction being edited should re-trigger
+    // this — not every keystroke of `instruments`/`name` as the user types.
+  }, [editingTransaction?.id])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SymbolMatch[]>([])
@@ -95,7 +117,7 @@ export function TransactionForm({
     }
 
     const candidate: Transaction = {
-      id: crypto.randomUUID(),
+      id: editingTransaction?.id ?? crypto.randomUUID(),
       type,
       symbol: trimmedSymbol,
       date,
@@ -104,34 +126,63 @@ export function TransactionForm({
       fees: parsedFees,
     }
 
-    if (type === 'sell') {
-      // Validate against the holding ON THE TRANSACTION'S OWN DATE, not
-      // today's — a back-dated sell could otherwise pass this check against
-      // today's larger holding and only fail later, deep inside
-      // computePositions/buildHistory. Scoped to this symbol's own
-      // transactions so an unrelated bad transaction elsewhere can't block
-      // an otherwise-valid entry.
-      const sameSymbol = transactions.filter((tx) => tx.symbol === trimmedSymbol)
+    // Validate against the holding ON THE TRANSACTION'S OWN DATE, not
+    // today's — a back-dated sell could otherwise pass this check against
+    // today's larger holding and only fail later, deep inside
+    // computePositions/buildHistory. Runs for buys too: editing an earlier
+    // buy's quantity down can retroactively break a later, unchanged sell.
+    // Scoped to this symbol's own transactions (minus the transaction being
+    // edited, if any) so an unrelated bad transaction elsewhere can't block
+    // an otherwise-valid entry.
+    const sameSymbol = transactions.filter((tx) => tx.symbol === trimmedSymbol && tx.id !== candidate.id)
+    try {
+      computePositions([...sameSymbol, candidate], {})
+    } catch (err) {
+      if (!(err instanceof RangeError)) throw err
+      const heldAsOfDate = computePositions(sameSymbol.filter((tx) => tx.date <= date), {})[0]?.quantity ?? 0
+      setError(`Verkauf übersteigt den Bestand am ${formatDate(date)} (gehalten: ${formatQuantity(heldAsOfDate)}).`)
+      return
+    }
+
+    // Editing can also change the symbol — make sure the OLD symbol's
+    // remaining chain still holds up without this transaction in it.
+    if (editingTransaction && editingTransaction.symbol !== trimmedSymbol) {
+      const oldSymbolRest = transactions.filter(
+        (tx) => tx.symbol === editingTransaction.symbol && tx.id !== candidate.id,
+      )
       try {
-        computePositions([...sameSymbol, candidate], {})
+        computePositions(oldSymbolRest, {})
       } catch (err) {
         if (!(err instanceof RangeError)) throw err
-        const heldAsOfDate =
-          computePositions(sameSymbol.filter((tx) => tx.date <= date), {})[0]?.quantity ?? 0
         setError(
-          `Verkauf übersteigt den Bestand am ${formatDate(date)} (gehalten: ${formatQuantity(heldAsOfDate)}).`,
+          `Diese Änderung würde eine andere Transaktion in ${editingTransaction.symbol} ungültig machen.`,
         )
         return
       }
     }
 
-    onAdd(candidate)
+    if (editingTransaction) {
+      onUpdate(candidate)
+    } else {
+      onAdd(candidate)
+    }
 
     if (!instruments[trimmedSymbol] || name.trim() !== '') {
       onUpsertInstrument(trimmedSymbol, { name: name.trim() || trimmedSymbol, kind })
     }
 
+    if (editingTransaction) {
+      onCancelEdit?.()
+    } else {
+      reset()
+    }
+  }
+
+  function handleCancelEdit() {
     reset()
+    setType('buy')
+    setError(null)
+    onCancelEdit?.()
   }
 
   return (
@@ -291,9 +342,16 @@ export function TransactionForm({
 
       {error && <p className="form-error">{error}</p>}
 
-      <button type="submit" className="primary-button">
-        {type === 'buy' ? 'Kauf erfassen' : 'Verkauf erfassen'}
-      </button>
+      <div className="form-actions">
+        <button type="submit" className="primary-button">
+          {editingTransaction ? 'Änderungen speichern' : type === 'buy' ? 'Kauf erfassen' : 'Verkauf erfassen'}
+        </button>
+        {editingTransaction && (
+          <button type="button" className="icon-button" onClick={handleCancelEdit}>
+            Abbrechen
+          </button>
+        )}
+      </div>
     </form>
   )
 }

@@ -44,6 +44,17 @@ describe('usePortfolioStore', () => {
     expect(loadTransactions()).toEqual([])
   })
 
+  it('replaces a transaction by id and persists it', () => {
+    const { result } = renderHook(() => usePortfolioStore())
+    act(() => result.current.addTransaction(buy))
+
+    const edited: Transaction = { ...buy, quantity: 5, price: 150 }
+    act(() => result.current.updateTransaction(buy.id, edited))
+
+    expect(result.current.transactions).toEqual([edited])
+    expect(loadTransactions()).toEqual([edited])
+  })
+
   it('upserts an instrument and persists it', () => {
     const { result } = renderHook(() => usePortfolioStore())
 

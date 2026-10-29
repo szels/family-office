@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import './app.css'
 import { AllocationDonut } from './components/AllocationDonut'
 import { HistoryChart } from './components/HistoryChart'
@@ -10,7 +10,7 @@ import { TransactionForm } from './components/TransactionForm'
 import { TransactionList } from './components/TransactionList'
 import { buildHistory } from './domain/history'
 import { computePositions } from './domain/portfolio'
-import type { HistoryPoint, Position } from './domain/types'
+import type { HistoryPoint, Position, Transaction } from './domain/types'
 import { usePortfolioStore } from './hooks/usePortfolioStore'
 import { usePrices } from './hooks/usePrices'
 import { formatDate } from './lib/format'
@@ -19,6 +19,13 @@ function App() {
   const store = usePortfolioStore()
   const { transactions, instruments, settings } = store
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+  const formSectionRef = useRef<HTMLElement>(null)
+
+  function startEditing(transaction: Transaction) {
+    setEditingTransaction(transaction)
+    formSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const symbols = useMemo(() => {
     const set = new Set(transactions.map((tx) => tx.symbol))
@@ -139,20 +146,29 @@ function App() {
         />
       </section>
 
-      <section className="app-section">
-        <h2>Transaktion erfassen</h2>
+      <section className="app-section" ref={formSectionRef}>
+        <h2>{editingTransaction ? 'Transaktion bearbeiten' : 'Transaktion erfassen'}</h2>
         <TransactionForm
           instruments={instruments}
           transactions={transactions}
           apiKey={settings.apiKey}
+          editingTransaction={editingTransaction ?? undefined}
           onAdd={store.addTransaction}
+          onUpdate={(tx) => store.updateTransaction(tx.id, tx)}
           onUpsertInstrument={store.upsertInstrument}
+          onCancelEdit={() => setEditingTransaction(null)}
         />
       </section>
 
       <section className="app-section">
         <h2>Transaktionen</h2>
-        <TransactionList transactions={transactions} instruments={instruments} onRemove={store.removeTransaction} />
+        <TransactionList
+          transactions={transactions}
+          instruments={instruments}
+          onEdit={startEditing}
+          onRemove={store.removeTransaction}
+          editingId={editingTransaction?.id}
+        />
       </section>
     </div>
   )

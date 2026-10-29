@@ -33,6 +33,10 @@ export function usePortfolioStore() {
     setTransactions((prev) => prev.filter((tx) => tx.id !== id))
   }, [])
 
+  const updateTransaction = useCallback((id: string, transaction: Transaction) => {
+    setTransactions((prev) => prev.map((tx) => (tx.id === id ? transaction : tx)))
+  }, [])
+
   const upsertInstrument = useCallback((symbol: string, instrument: Instrument) => {
     setInstruments((prev) => ({ ...prev, [symbol]: instrument }))
   }, [])
@@ -53,6 +57,7 @@ export function usePortfolioStore() {
     settings,
     addTransaction,
     removeTransaction,
+    updateTransaction,
     upsertInstrument,
     updateApiKey,
     importAll,

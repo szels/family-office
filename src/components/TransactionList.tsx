@@ -4,10 +4,12 @@ import { formatCurrency, formatDate, formatQuantity } from '../lib/format'
 interface TransactionListProps {
   transactions: Transaction[]
   instruments: Record<string, Instrument>
+  onEdit: (transaction: Transaction) => void
   onRemove: (id: string) => void
+  editingId?: string
 }
 
-export function TransactionList({ transactions, instruments, onRemove }: TransactionListProps) {
+export function TransactionList({ transactions, instruments, onEdit, onRemove, editingId }: TransactionListProps) {
   if (transactions.length === 0) {
     return <p className="empty-hint">Noch keine Transaktionen erfasst.</p>
   }
@@ -29,7 +31,7 @@ export function TransactionList({ transactions, instruments, onRemove }: Transac
       </thead>
       <tbody>
         {sorted.map((tx) => (
-          <tr key={tx.id}>
+          <tr key={tx.id} className={tx.id === editingId ? 'tx-row--editing' : undefined}>
             <td className="num">{formatDate(tx.date)}</td>
             <td className={tx.type === 'buy' ? 'tx-type tx-type--buy' : 'tx-type tx-type--sell'}>
               {tx.type === 'buy' ? 'Kauf' : 'Verkauf'}
@@ -41,7 +43,10 @@ export function TransactionList({ transactions, instruments, onRemove }: Transac
             <td className="num">{formatQuantity(tx.quantity)}</td>
             <td className="num">{formatCurrency(tx.price)}</td>
             <td className="num">{formatCurrency(tx.fees)}</td>
-            <td>
+            <td className="tx-actions">
+              <button type="button" className="icon-button" onClick={() => onEdit(tx)} aria-label="Transaktion bearbeiten">
+                Bearbeiten
+              </button>
               <button type="button" className="icon-button" onClick={() => onRemove(tx.id)} aria-label="Transaktion löschen">
                 Löschen
               </button>
