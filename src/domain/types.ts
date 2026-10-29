@@ -52,3 +52,16 @@ export interface HistoryPoint {
   /** Total cost basis of all open positions on this date. */
   invested: number
 }
+
+export interface Settings {
+  apiKey?: string
+}
+
+export interface PriceCacheEntry {
+  /** Date the series was last fetched; used to avoid refetching same-day. */
+  fetchedAt: IsoDate
+  /** Ascending by date. */
+  series: PricePoint[]
+}
+
+export type PriceCache = Record<string, PriceCacheEntry>
