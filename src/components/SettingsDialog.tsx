@@ -59,7 +59,8 @@ export function SettingsDialog({ apiKey, onUpdateApiKey, onExport, onImport }: S
           </button>
         </div>
         <p className="field-hint">
-          Wird nur lokal in diesem Browser gespeichert, nie exportiert oder an Dritte gesendet.
+          Wird nur lokal in diesem Browser gespeichert und nie exportiert. Für Kursabfragen wird er an
+          Alpha&nbsp;Vantage übertragen, sonst an niemanden.
         </p>
       </div>
 
