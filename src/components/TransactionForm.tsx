@@ -2,11 +2,8 @@ import { useId, useState } from 'react'
 import { searchSymbol, type SymbolMatch } from '../data/alphaVantage'
 import { computePositions } from '../domain/portfolio'
 import type { Instrument, InstrumentKind, Transaction, TransactionType } from '../domain/types'
+import { todayIso } from '../lib/date'
 import { formatDate, formatQuantity } from '../lib/format'
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 interface TransactionFormProps {
   instruments: Record<string, Instrument>
@@ -264,6 +261,14 @@ export function TransactionForm({
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              // This input lives inside the transaction <form>; without this,
+              // Enter here submits the whole transaction instead of searching.
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void handleSearch()
+              }
+            }}
             placeholder="Wertpapier suchen (Name oder Symbol)"
           />
           <button type="button" onClick={handleSearch} disabled={searchStatus === 'loading'}>

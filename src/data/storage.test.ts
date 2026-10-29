@@ -107,4 +107,43 @@ describe('export / import', () => {
   it('rejects valid JSON missing the expected shape', () => {
     expect(() => importData(JSON.stringify({ foo: 'bar' }))).toThrow()
   })
+
+  it('rejects a transaction with an invalid type instead of silently treating it as a sell', () => {
+    const bad = { ...transaction, type: 'BUY' } // wrong case — not the literal 'buy'
+    expect(() => importData(JSON.stringify({ transactions: [bad], instruments }))).toThrow()
+  })
+
+  it('rejects a transaction with a non-numeric quantity', () => {
+    const bad = { ...transaction, quantity: '10' }
+    expect(() => importData(JSON.stringify({ transactions: [bad], instruments }))).toThrow()
+  })
+
+  it('rejects a transaction with a malformed date', () => {
+    const bad = { ...transaction, date: '10.01.2026' }
+    expect(() => importData(JSON.stringify({ transactions: [bad], instruments }))).toThrow()
+  })
+
+  it('rejects duplicate transaction ids', () => {
+    const dup = [transaction, { ...transaction, price: 50 }]
+    expect(() => importData(JSON.stringify({ transactions: dup, instruments }))).toThrow()
+  })
+
+  it('rejects instruments given as an array instead of an object', () => {
+    expect(() => importData(JSON.stringify({ transactions: [], instruments: [] }))).toThrow()
+  })
+
+  it('rejects internally inconsistent data (a sell with no matching buy) via a dry run', () => {
+    const sellOnly = { ...transaction, id: 'tx-sell', type: 'sell' as const }
+    expect(() => importData(JSON.stringify({ transactions: [sellOnly], instruments }))).toThrow()
+  })
+
+  it('leaves existing data untouched when an import is rejected', () => {
+    saveTransactions([transaction])
+    saveInstruments(instruments)
+
+    expect(() => importData(JSON.stringify({ foo: 'bar' }))).toThrow()
+
+    expect(loadTransactions()).toEqual([transaction])
+    expect(loadInstruments()).toEqual(instruments)
+  })
 })

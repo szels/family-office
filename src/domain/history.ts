@@ -1,9 +1,6 @@
+import { todayIso } from '../lib/date'
 import { computePositions } from './portfolio'
 import type { HistoryPoint, IsoDate, PricePoint, Transaction } from './types'
-
-function todayIso(): IsoDate {
-  return new Date().toISOString().slice(0, 10)
-}
 
 /** Last close at or before `date`, falling back when no price point qualifies yet. */
 function priceOnOrBefore(series: PricePoint[], date: IsoDate, fallback: number): number {

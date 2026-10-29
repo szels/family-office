@@ -62,6 +62,12 @@ export interface PriceCacheEntry {
   fetchedAt: IsoDate
   /** Ascending by date. */
   series: PricePoint[]
+  /**
+   * Set when the fetch on `fetchedAt` failed for a reason other than the
+   * rate limit (e.g. an unknown symbol) — skip it for the rest of that day
+   * rather than spending another of the 25 daily requests on it.
+   */
+  failed?: boolean
 }
 
 export type PriceCache = Record<string, PriceCacheEntry>

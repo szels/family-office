@@ -1,10 +1,7 @@
 import { fetchWeekly, RateLimitError } from './alphaVantage'
 import { loadPriceCache, savePriceCache } from './storage'
 import type { IsoDate, PricePoint } from '../domain/types'
-
-function todayIso(): IsoDate {
-  return new Date().toISOString().slice(0, 10)
-}
+import { todayIso } from '../lib/date'
 
 export interface PriceCacheResult {
   series: Record<string, PricePoint[]>
@@ -34,13 +31,17 @@ export async function getSeries(
   for (const symbol of symbols) {
     const cached = cache[symbol]
     if (cached && cached.fetchedAt === asOf) {
-      series[symbol] = cached.series
+      if (cached.failed) {
+        failed.push(symbol)
+      } else {
+        series[symbol] = cached.series
+      }
       continue
     }
 
     if (rateLimitHit) {
       rateLimited.push(symbol)
-      if (cached) series[symbol] = cached.series
+      if (cached && !cached.failed) series[symbol] = cached.series
       continue
     }
 
@@ -52,10 +53,13 @@ export async function getSeries(
       if (error instanceof RateLimitError) {
         rateLimitHit = true
         rateLimited.push(symbol)
+        if (cached && !cached.failed) series[symbol] = cached.series
       } else {
+        // Not a quota problem (e.g. an unknown symbol) — mark it so today's
+        // later calls don't spend another of the 25 daily requests on it.
         failed.push(symbol)
+        cache[symbol] = { fetchedAt: asOf, series: [], failed: true }
       }
-      if (cached) series[symbol] = cached.series
     }
   }
 

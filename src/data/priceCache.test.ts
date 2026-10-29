@@ -76,4 +76,32 @@ describe('getSeries', () => {
     expect(result.series['SAP.DEX']).toEqual(freshSeries)
     expect(fetchWeeklyMock).toHaveBeenCalledTimes(2)
   })
+
+  it('marks a failed symbol in the cache so it is not retried the same day', async () => {
+    fetchWeeklyMock.mockRejectedValueOnce(new UnknownSymbolError('nope'))
+
+    await getSeries(['BOGUS'], 'demo-key', TODAY)
+
+    expect(loadPriceCache()).toEqual({ BOGUS: { fetchedAt: TODAY, series: [], failed: true } })
+  })
+
+  it('does not call the API again for a symbol that already failed today', async () => {
+    savePriceCache({ BOGUS: { fetchedAt: TODAY, series: [], failed: true } })
+
+    const result = await getSeries(['BOGUS'], 'demo-key', TODAY)
+
+    expect(fetchWeeklyMock).not.toHaveBeenCalled()
+    expect(result.failed).toEqual(['BOGUS'])
+    expect(result.series.BOGUS).toBeUndefined()
+  })
+
+  it('retries a symbol that failed on an earlier day', async () => {
+    savePriceCache({ BOGUS: { fetchedAt: '2026-02-20', series: [], failed: true } })
+    fetchWeeklyMock.mockResolvedValue(freshSeries)
+
+    const result = await getSeries(['BOGUS'], 'demo-key', TODAY)
+
+    expect(fetchWeeklyMock).toHaveBeenCalledOnce()
+    expect(result.series.BOGUS).toEqual(freshSeries)
+  })
 })

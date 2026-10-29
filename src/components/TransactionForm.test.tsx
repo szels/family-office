@@ -1,16 +1,27 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TransactionForm } from './TransactionForm'
 import type { Transaction } from '../domain/types'
 
-function renderForm(transactions: Transaction[] = []) {
+vi.mock('../data/alphaVantage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../data/alphaVantage')>()
+  return { ...actual, searchSymbol: vi.fn() }
+})
+const { searchSymbol } = await import('../data/alphaVantage')
+const searchSymbolMock = vi.mocked(searchSymbol)
+
+beforeEach(() => {
+  searchSymbolMock.mockReset()
+})
+
+function renderForm(transactions: Transaction[] = [], apiKey: string | undefined = undefined) {
   const onAdd = vi.fn()
   const onUpsertInstrument = vi.fn()
   render(
     <TransactionForm
       instruments={{}}
       transactions={transactions}
-      apiKey={undefined}
+      apiKey={apiKey}
       onAdd={onAdd}
       onUpsertInstrument={onUpsertInstrument}
     />,
@@ -64,5 +75,17 @@ describe('TransactionForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Kauf erfassen' }))
 
     expect(onAdd).toHaveBeenCalledOnce()
+  })
+
+  it('pressing Enter in the symbol-search box searches instead of submitting the transaction', () => {
+    searchSymbolMock.mockResolvedValue([])
+    const { onAdd } = renderForm([], 'demo-key')
+
+    const searchInput = screen.getByPlaceholderText('Wertpapier suchen (Name oder Symbol)')
+    fireEvent.change(searchInput, { target: { value: 'SAP' } })
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
+
+    expect(searchSymbolMock).toHaveBeenCalledWith('SAP', 'demo-key')
+    expect(onAdd).not.toHaveBeenCalled()
   })
 })

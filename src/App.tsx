@@ -13,6 +13,7 @@ import { computePositions } from './domain/portfolio'
 import type { HistoryPoint, Position } from './domain/types'
 import { usePortfolioStore } from './hooks/usePortfolioStore'
 import { usePrices } from './hooks/usePrices'
+import { formatDate } from './lib/format'
 
 function App() {
   const store = usePortfolioStore()
@@ -53,14 +54,22 @@ function App() {
 
   const totalValue = positions.reduce((sum, p) => sum + p.marketValue, 0)
   const totalInvested = positions.reduce((sum, p) => sum + p.costBasis, 0)
-  const lastUpdated = history.at(-1)?.date
+
+  // The newest date actually present in a fetched price series — not
+  // "today": buildHistory always appends today's date regardless of
+  // whether any fresh quote came back (no API key, rate-limited, or a
+  // stale cache all still show a correct "as of" date this way).
+  const lastUpdated = Object.values(prices.series)
+    .flatMap((series) => series.at(-1)?.date ?? [])
+    .sort()
+    .at(-1)
 
   return (
     <div className="app">
       <header className="app-header">
         <div>
           <h1>Mein Depot</h1>
-          {lastUpdated && <p className="app-subtitle">Kurse vom {lastUpdated.split('-').reverse().join('.')}</p>}
+          {lastUpdated && <p className="app-subtitle">Kurse vom {formatDate(lastUpdated)}</p>}
         </div>
         <button type="button" className="icon-button" onClick={() => setSettingsOpen((v) => !v)}>
           Einstellungen
