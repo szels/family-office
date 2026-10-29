@@ -1,6 +1,8 @@
 import { useId, useState } from 'react'
 import { searchSymbol, type SymbolMatch } from '../data/alphaVantage'
-import type { Instrument, InstrumentKind, Position, Transaction, TransactionType } from '../domain/types'
+import { computePositions } from '../domain/portfolio'
+import type { Instrument, InstrumentKind, Transaction, TransactionType } from '../domain/types'
+import { formatDate, formatQuantity } from '../lib/format'
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -8,7 +10,7 @@ function todayIso(): string {
 
 interface TransactionFormProps {
   instruments: Record<string, Instrument>
-  positions: Position[]
+  transactions: Transaction[]
   apiKey: string | undefined
   onAdd: (transaction: Transaction) => void
   onUpsertInstrument: (symbol: string, instrument: Instrument) => void
@@ -16,7 +18,7 @@ interface TransactionFormProps {
 
 export function TransactionForm({
   instruments,
-  positions,
+  transactions,
   apiKey,
   onAdd,
   onUpsertInstrument,
@@ -95,15 +97,7 @@ export function TransactionForm({
       return
     }
 
-    if (type === 'sell') {
-      const held = positions.find((p) => p.symbol === trimmedSymbol)?.quantity ?? 0
-      if (parsedQuantity > held) {
-        setError(`Verkauf übersteigt den Bestand (gehalten: ${held}).`)
-        return
-      }
-    }
-
-    onAdd({
+    const candidate: Transaction = {
       id: crypto.randomUUID(),
       type,
       symbol: trimmedSymbol,
@@ -111,7 +105,30 @@ export function TransactionForm({
       quantity: parsedQuantity,
       price: parsedPrice,
       fees: parsedFees,
-    })
+    }
+
+    if (type === 'sell') {
+      // Validate against the holding ON THE TRANSACTION'S OWN DATE, not
+      // today's — a back-dated sell could otherwise pass this check against
+      // today's larger holding and only fail later, deep inside
+      // computePositions/buildHistory. Scoped to this symbol's own
+      // transactions so an unrelated bad transaction elsewhere can't block
+      // an otherwise-valid entry.
+      const sameSymbol = transactions.filter((tx) => tx.symbol === trimmedSymbol)
+      try {
+        computePositions([...sameSymbol, candidate], {})
+      } catch (err) {
+        if (!(err instanceof RangeError)) throw err
+        const heldAsOfDate =
+          computePositions(sameSymbol.filter((tx) => tx.date <= date), {})[0]?.quantity ?? 0
+        setError(
+          `Verkauf übersteigt den Bestand am ${formatDate(date)} (gehalten: ${formatQuantity(heldAsOfDate)}).`,
+        )
+        return
+      }
+    }
+
+    onAdd(candidate)
 
     if (!instruments[trimmedSymbol] || name.trim() !== '') {
       onUpsertInstrument(trimmedSymbol, { name: name.trim() || trimmedSymbol, kind })
@@ -187,7 +204,13 @@ export function TransactionForm({
           <label htmlFor={`${formId}-date`} className="field-label">
             Datum
           </label>
-          <input id={`${formId}-date`} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input
+            id={`${formId}-date`}
+            type="date"
+            value={date}
+            max={todayIso()}
+            onChange={(e) => setDate(e.target.value)}
+          />
         </div>
 
         <div className="field">

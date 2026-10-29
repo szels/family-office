@@ -107,6 +107,25 @@ describe('computePositions', () => {
     expect(() => computePositions(transactions, { 'SAP.DEX': 100 })).toThrow(RangeError)
   })
 
+  it('allows selling a holding whose floating-point sum is a hair above the sell quantity', () => {
+    // 0.1 + 0.1 + 0.1 === 0.30000000000000004 in IEEE 754 — a real shape for
+    // ETF savings-plan buys. Selling exactly "0.3" must fully close it.
+    const transactions = [
+      buy({ id: 'a', quantity: 0.1, price: 100 }),
+      buy({ id: 'b', quantity: 0.1, price: 100 }),
+      buy({ id: 'c', quantity: 0.1, price: 100 }),
+      sell({ id: 'd', quantity: 0.3, price: 120 }),
+    ]
+
+    expect(computePositions(transactions, { 'SAP.DEX': 100 })).toEqual([])
+  })
+
+  it('rejects a sell that exceeds the holding by more than floating-point noise', () => {
+    const transactions = [buy({ quantity: 0.3, price: 100 }), sell({ quantity: 0.31, price: 120 })]
+
+    expect(() => computePositions(transactions, { 'SAP.DEX': 100 })).toThrow(RangeError)
+  })
+
   it('keeps separate positions per symbol', () => {
     const transactions = [
       buy({ id: 'a', symbol: 'SAP.DEX', quantity: 10, price: 100 }),

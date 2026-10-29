@@ -10,7 +10,7 @@ import { TransactionForm } from './components/TransactionForm'
 import { TransactionList } from './components/TransactionList'
 import { buildHistory } from './domain/history'
 import { computePositions } from './domain/portfolio'
-import type { Position } from './domain/types'
+import type { HistoryPoint, Position } from './domain/types'
 import { usePortfolioStore } from './hooks/usePortfolioStore'
 import { usePrices } from './hooks/usePrices'
 
@@ -38,7 +38,18 @@ function App() {
     }
   }, [transactions, prices.latestPrices])
 
-  const history = useMemo(() => buildHistory(transactions, prices.series), [transactions, prices.series])
+  const { history, historyError } = useMemo(() => {
+    try {
+      return { history: buildHistory(transactions, prices.series), historyError: null }
+    } catch (error) {
+      return {
+        history: [] as HistoryPoint[],
+        historyError: error instanceof Error ? error.message : 'Unbekannter Fehler bei der Historienberechnung.',
+      }
+    }
+  }, [transactions, prices.series])
+
+  const dataError = positionsError ?? historyError
 
   const totalValue = positions.reduce((sum, p) => sum + p.marketValue, 0)
   const totalInvested = positions.reduce((sum, p) => sum + p.costBasis, 0)
@@ -72,7 +83,12 @@ function App() {
           Hinterlege einen kostenlosen Alpha&nbsp;Vantage API-Key unter „Einstellungen“, um aktuelle Kurse zu laden.
         </p>
       )}
-      {positionsError && <p className="banner banner--error">{positionsError}</p>}
+      {dataError && (
+        <p className="banner banner--error">
+          Datenfehler in den Transaktionen: {dataError} Bitte die betroffene Transaktion unten in der Liste
+          korrigieren oder löschen.
+        </p>
+      )}
       {prices.rateLimited.length > 0 && (
         <p className="banner banner--info">
           Tageslimit der Kurs-API erreicht — zeige zuletzt bekannte Kurse für: {prices.rateLimited.join(', ')}.
@@ -118,7 +134,7 @@ function App() {
         <h2>Transaktion erfassen</h2>
         <TransactionForm
           instruments={instruments}
-          positions={positions}
+          transactions={transactions}
           apiKey={settings.apiKey}
           onAdd={store.addTransaction}
           onUpsertInstrument={store.upsertInstrument}

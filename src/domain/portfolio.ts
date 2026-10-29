@@ -16,40 +16,39 @@ function applyBuy(lot: Lot, quantity: number, price: number, fees: number): Lot 
 }
 
 /**
+ * Below this, a quantity difference is treated as IEEE-754 rounding noise
+ * rather than a real holding. Buys accumulate via repeated float addition
+ * (e.g. three 0.1-unit savings-plan buys sum to 0.30000000000000004), so a
+ * sell of exactly "0.3" must still be accepted and must fully close the
+ * position instead of leaving a ~5.5e-17 ghost remainder.
+ */
+const QUANTITY_EPSILON = 1e-9
+
+/**
  * Apply a sell to a lot using the average-cost method: the cost basis
  * removed is proportional to the share of the holding being sold, valued
  * at the lot's current average cost (not the original purchase prices).
- *
- * TODO(Steffen): implement this. Average cost per unit before the sale is
- * `lot.costBasis / lot.quantity`. You need to:
- *   1. Guard: if `quantity` is more than `lot.quantity`, throw a
- *      `RangeError` (selling more than you hold is a user input error).
- *   2. Compute `avgCost = lot.costBasis / lot.quantity`.
- *   3. Compute the cost basis removed: `quantity * avgCost`.
- *   4. Compute realized gain for this sell: proceeds (`quantity * price - fees`)
- *      minus the cost basis removed — add it to `lot.realizedGain`.
- *   5. Return the new lot: quantity reduced by `quantity`, costBasis reduced
- *      by the amount removed in step 3, realizedGain from step 4.
- *
- * The tests in portfolio.test.ts ("reduces quantity...", "tracks realized
- * gain...", "removes the position...", "throws when selling more...") are
- * red until this is implemented — run `npm test` to see them fail, then
- * make them pass.
  */
 function applySell(lot: Lot, quantity: number, price: number, fees: number): Lot {
-  if (quantity > lot.quantity) {
-    throw new RangeError(
-      `cannot sell ${quantity} units, only ${lot.quantity} held`,
-    )
+  if (quantity > lot.quantity + QUANTITY_EPSILON) {
+    throw new RangeError(`cannot sell ${quantity} units, only ${lot.quantity} held`)
   }
 
   const avgCost = lot.costBasis / lot.quantity
   const costRemoved = quantity * avgCost
   const proceeds = quantity * price - fees
   const realizedGain = proceeds - costRemoved
+  const remainingQuantity = lot.quantity - quantity
+
+  // Selling (approximately) everything: snap to exactly zero rather than
+  // leaving a float residual that `quantity <= 0` in computePositions
+  // wouldn't catch.
+  if (Math.abs(remainingQuantity) < QUANTITY_EPSILON) {
+    return { quantity: 0, costBasis: 0, realizedGain: lot.realizedGain + realizedGain }
+  }
 
   return {
-    quantity: lot.quantity - quantity,
+    quantity: remainingQuantity,
     costBasis: lot.costBasis - costRemoved,
     realizedGain: lot.realizedGain + realizedGain,
   }
