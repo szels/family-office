@@ -10,6 +10,7 @@ import { TransactionForm } from './components/TransactionForm'
 import { TransactionList } from './components/TransactionList'
 import { buildHistory } from './domain/history'
 import { computePositions } from './domain/portfolio'
+import { computeAnnualizedReturn } from './domain/returns'
 import type { HistoryPoint, Position, Transaction } from './domain/types'
 import { usePortfolioStore } from './hooks/usePortfolioStore'
 import { usePrices } from './hooks/usePrices'
@@ -61,6 +62,15 @@ function App() {
 
   const totalValue = positions.reduce((sum, p) => sum + p.marketValue, 0)
   const totalInvested = positions.reduce((sum, p) => sum + p.costBasis, 0)
+
+  const since = transactions.length === 0
+    ? null
+    : transactions.reduce((min, tx) => (tx.date < min ? tx.date : min), transactions[0].date)
+
+  const annualizedReturn = useMemo(
+    () => computeAnnualizedReturn(transactions, totalValue),
+    [transactions, totalValue],
+  )
 
   // The newest date actually present in a fetched price series — not
   // "today": buildHistory always appends today's date regardless of
@@ -117,7 +127,7 @@ function App() {
       )}
 
       <section className="app-section">
-        <KpiRow value={totalValue} invested={totalInvested} />
+        <KpiRow value={totalValue} invested={totalInvested} annualizedReturn={annualizedReturn} since={since} />
       </section>
 
       <section className="app-section">
