@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# Depot
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Eine kleine Single-Page-App, um ein Aktien-/ETF-Depot zu erfassen und die
+Wertentwicklung grafisch zu verfolgen. Alle Daten (Transaktionen,
+Wertpapiere, API-Key, Kurs-Cache) bleiben ausschließlich im `localStorage`
+des Browsers — es gibt keinen eigenen Server.
 
-Currently, two official plugins are available:
+Design und Entscheidungen im Detail:
+[`docs/superpowers/specs/2026-10-29-portfolio-spa-design.md`](docs/superpowers/specs/2026-10-29-portfolio-spa-design.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Kurse
 
-## React Compiler
+Kursdaten kommen von [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
+(kostenloser API-Key). Der Key wird unter „Einstellungen“ eingetragen und
+bleibt lokal im Browser. Die kostenlose Stufe erlaubt 25 Anfragen pro Tag;
+die App cacht Kurse deshalb pro Tag und Symbol und zeigt bei Erreichen des
+Limits die zuletzt bekannten Kurse weiter an.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Symbole folgen Alpha Vantages Notation für Xetra, z. B. `SAP.DEX` oder
+`EUNL.DEX` (iShares Core MSCI World).
 
-## Expanding the Oxlint configuration
+## Entwicklung
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev      # Dev-Server
+npm test         # Vitest, einmalig
+npm run build    # Typecheck + Produktions-Build nach dist/
+npm run preview  # dist/ lokal ansehen
+npm run lint      # oxlint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Deployment
+
+Ein Push auf `main` baut und veröffentlicht die App automatisch auf
+GitHub Pages (`.github/workflows/deploy.yml`). Einmalig in den
+Repository-Einstellungen unter **Settings → Pages** als Quelle
+**GitHub Actions** auswählen.
