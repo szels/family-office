@@ -1,121 +1,135 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useMemo, useState } from 'react'
+import './app.css'
+import { AllocationDonut } from './components/AllocationDonut'
+import { HistoryChart } from './components/HistoryChart'
+import { KpiRow } from './components/KpiRow'
+import { PositionsTable } from './components/PositionsTable'
+import { SettingsDialog } from './components/SettingsDialog'
+import { TickerChart } from './components/TickerChart'
+import { TransactionForm } from './components/TransactionForm'
+import { TransactionList } from './components/TransactionList'
+import { buildHistory } from './domain/history'
+import { computePositions } from './domain/portfolio'
+import type { Position } from './domain/types'
+import { usePortfolioStore } from './hooks/usePortfolioStore'
+import { usePrices } from './hooks/usePrices'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const store = usePortfolioStore()
+  const { transactions, instruments, settings } = store
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  const symbols = useMemo(() => {
+    const set = new Set(transactions.map((tx) => tx.symbol))
+    for (const symbol of Object.keys(instruments)) set.add(symbol)
+    return [...set]
+  }, [transactions, instruments])
+
+  const prices = usePrices(symbols, settings.apiKey)
+
+  const { positions, positionsError } = useMemo(() => {
+    try {
+      return { positions: computePositions(transactions, prices.latestPrices), positionsError: null }
+    } catch (error) {
+      return {
+        positions: [] as Position[],
+        positionsError: error instanceof Error ? error.message : 'Unbekannter Fehler bei der Depotberechnung.',
+      }
+    }
+  }, [transactions, prices.latestPrices])
+
+  const history = useMemo(() => buildHistory(transactions, prices.series), [transactions, prices.series])
+
+  const totalValue = positions.reduce((sum, p) => sum + p.marketValue, 0)
+  const totalInvested = positions.reduce((sum, p) => sum + p.costBasis, 0)
+  const lastUpdated = history.at(-1)?.date
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <div className="app">
+      <header className="app-header">
+        <div>
+          <h1>Mein Depot</h1>
+          {lastUpdated && <p className="app-subtitle">Kurse vom {lastUpdated.split('-').reverse().join('.')}</p>}
+        </div>
+        <button type="button" className="icon-button" onClick={() => setSettingsOpen((v) => !v)}>
+          Einstellungen
+        </button>
+      </header>
+
+      {settingsOpen && (
+        <section className="app-section">
+          <SettingsDialog
+            apiKey={settings.apiKey}
+            onUpdateApiKey={store.updateApiKey}
+            onExport={store.exportAll}
+            onImport={store.importAll}
+          />
+        </section>
+      )}
+
+      {!settings.apiKey && (
+        <p className="banner banner--info">
+          Hinterlege einen kostenlosen Alpha&nbsp;Vantage API-Key unter „Einstellungen“, um aktuelle Kurse zu laden.
+        </p>
+      )}
+      {positionsError && <p className="banner banner--error">{positionsError}</p>}
+      {prices.rateLimited.length > 0 && (
+        <p className="banner banner--info">
+          Tageslimit der Kurs-API erreicht — zeige zuletzt bekannte Kurse für: {prices.rateLimited.join(', ')}.
+        </p>
+      )}
+      {prices.failed.length > 0 && (
+        <p className="banner banner--error">
+          Keine Kursdaten gefunden für: {prices.failed.join(', ')}. Prüfe die Symbole.
+        </p>
+      )}
+
+      <section className="app-section">
+        <KpiRow value={totalValue} invested={totalInvested} />
+      </section>
+
+      <section className="app-section">
+        <h2>Wertentwicklung</h2>
+        <HistoryChart history={history} />
+      </section>
+
+      <section className="app-section app-section--split">
+        <div>
+          <h2>Aufteilung</h2>
+          <AllocationDonut positions={positions} />
         </div>
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
+          <h2>Positionen</h2>
+          <PositionsTable positions={positions} instruments={instruments} />
         </div>
       </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <section className="app-section">
+        <h2>Kursverlauf</h2>
+        <TickerChart
+          symbols={symbols}
+          seriesBySymbol={prices.series}
+          transactions={transactions}
+          instruments={instruments}
+        />
+      </section>
+
+      <section className="app-section">
+        <h2>Transaktion erfassen</h2>
+        <TransactionForm
+          instruments={instruments}
+          positions={positions}
+          apiKey={settings.apiKey}
+          onAdd={store.addTransaction}
+          onUpsertInstrument={store.upsertInstrument}
+        />
+      </section>
+
+      <section className="app-section">
+        <h2>Transaktionen</h2>
+        <TransactionList transactions={transactions} instruments={instruments} onRemove={store.removeTransaction} />
+      </section>
+    </div>
   )
 }
 
