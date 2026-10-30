@@ -11,19 +11,7 @@ import {
 } from 'recharts'
 import type { HistoryPoint } from '../domain/types'
 import { formatCurrency, formatDate } from '../lib/format'
-
-const RANGES = [
-  { label: '1 J', years: 1 },
-  { label: '3 J', years: 3 },
-  { label: '5 J', years: 5 },
-  { label: 'Max', years: null },
-] as const
-
-function cutoffDate(lastDate: string, years: number): string {
-  const [year, month, day] = lastDate.split('-').map(Number)
-  const cutoff = new Date(Date.UTC(year - years, month - 1, day))
-  return cutoff.toISOString().slice(0, 10)
-}
+import { ChartRangeSelector, filterByRange, RANGES, type ChartRange } from './ChartRangeSelector'
 
 function CustomTooltip({ active, payload, label }: TooltipContentProps) {
   if (!active || !payload || payload.length === 0) return null
@@ -45,13 +33,9 @@ interface HistoryChartProps {
 }
 
 export function HistoryChart({ history }: HistoryChartProps) {
-  const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[3])
+  const [range, setRange] = useState<ChartRange>(RANGES[3])
 
-  const visible = useMemo(() => {
-    if (range.years === null || history.length === 0) return history
-    const cutoff = cutoffDate(history.at(-1)!.date, range.years)
-    return history.filter((point) => point.date >= cutoff)
-  }, [history, range])
+  const visible = useMemo(() => filterByRange(history, range), [history, range])
 
   if (history.length === 0) {
     return <p className="empty-hint">Noch keine Kursdaten. Hinterlege einen API-Key und eine erste Transaktion.</p>
@@ -59,18 +43,7 @@ export function HistoryChart({ history }: HistoryChartProps) {
 
   return (
     <div className="history-chart">
-      <div className="chart-ranges" role="group" aria-label="Zeitraum">
-        {RANGES.map((r) => (
-          <button
-            key={r.label}
-            type="button"
-            className={r.label === range.label ? 'range-button range-button--active' : 'range-button'}
-            onClick={() => setRange(r)}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
+      <ChartRangeSelector value={range} onChange={setRange} />
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={visible} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="var(--rule)" vertical={false} />
