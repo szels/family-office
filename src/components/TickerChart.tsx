@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import type { Instrument, PricePoint, Transaction } from '../domain/types'
 import { formatCurrency, formatDate } from '../lib/format'
+import { ChartRangeSelector, filterByRange, RANGES, type ChartRange } from './ChartRangeSelector'
 
 interface ChartPoint {
   date: string
@@ -68,6 +69,7 @@ interface TickerChartProps {
 
 export function TickerChart({ symbols, seriesBySymbol, transactions, instruments }: TickerChartProps) {
   const [selected, setSelected] = useState(symbols[0] ?? '')
+  const [range, setRange] = useState<ChartRange>(RANGES[3])
   // A symbol can disappear (last position in it sold off) between renders;
   // fall back to the first available one without a render-triggering effect.
   const effectiveSelected = symbols.includes(selected) ? selected : symbols[0] ?? ''
@@ -77,7 +79,9 @@ export function TickerChart({ symbols, seriesBySymbol, transactions, instruments
   }
 
   const symbolTransactions = transactions.filter((tx) => tx.symbol === effectiveSelected)
-  const data = buildChartData(seriesBySymbol[effectiveSelected] ?? [], symbolTransactions)
+  // Range filter runs after merging, so fill-forward of the close price still sees the
+  // full series and buy/sell markers outside the window drop out automatically.
+  const data = filterByRange(buildChartData(seriesBySymbol[effectiveSelected] ?? [], symbolTransactions), range)
 
   return (
     <div className="ticker-chart">
@@ -96,6 +100,7 @@ export function TickerChart({ symbols, seriesBySymbol, transactions, instruments
           ))}
         </select>
       </label>
+      <ChartRangeSelector value={range} onChange={setRange} />
       <ResponsiveContainer width="100%" height={240}>
         <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="var(--rule)" vertical={false} />
