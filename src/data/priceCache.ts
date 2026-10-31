@@ -1,4 +1,4 @@
-import { fetchWeekly, RateLimitError } from './alphaVantage'
+import { fetchMetalWeekly, fetchUsdEurRate, fetchWeekly, isMetalSymbol, RateLimitError } from './alphaVantage'
 import { loadPriceCache, savePriceCache } from './storage'
 import type { IsoDate, PricePoint } from '../domain/types'
 import { todayIso } from '../lib/date'
@@ -16,6 +16,11 @@ export interface PriceCacheResult {
  * already cached for `asOf` (defaults to today). Alpha Vantage's free tier
  * allows 25 requests/day, so once a rate limit is hit, remaining symbols
  * are served from cache (if any) instead of making further calls.
+ *
+ * Gold/silver (`isMetalSymbol`) come from a separate Alpha Vantage endpoint
+ * priced in USD/troy ounce; they're converted to EUR here (via a cached
+ * USD→EUR rate, see `resolveEurPerUsd`) so every caller downstream can keep
+ * treating every symbol the same.
  */
 export async function getSeries(
   symbols: string[],
@@ -28,7 +33,10 @@ export async function getSeries(
   const failed: string[] = []
   let rateLimitHit = false
 
-  for (const symbol of symbols) {
+  // Resolves one symbol through `fetcher`, applying the same cache/day and
+  // rate-limit-stop rules regardless of the underlying data source (stocks
+  // via fetchWeekly, metals via fetchMetalWeekly + FX conversion below).
+  async function resolve(symbol: string, fetcher: () => Promise<PricePoint[]>): Promise<void> {
     const cached = cache[symbol]
     if (cached && cached.fetchedAt === asOf) {
       if (cached.failed) {
@@ -36,17 +44,17 @@ export async function getSeries(
       } else {
         series[symbol] = cached.series
       }
-      continue
+      return
     }
 
     if (rateLimitHit) {
       rateLimited.push(symbol)
       if (cached && !cached.failed) series[symbol] = cached.series
-      continue
+      return
     }
 
     try {
-      const fresh = await fetchWeekly(symbol, apiKey)
+      const fresh = await fetcher()
       series[symbol] = fresh
       cache[symbol] = { fetchedAt: asOf, series: fresh }
     } catch (error) {
@@ -61,6 +69,46 @@ export async function getSeries(
         cache[symbol] = { fetchedAt: asOf, series: [], failed: true }
       }
     }
+  }
+
+  // The USD→EUR rate metals are converted through. Resolved at most once
+  // per call — shared by gold and silver — and cached like any other price
+  // under the synthetic key "EURUSD", but kept out of `series`/
+  // `rateLimited`/`failed`, which only ever list symbols the caller asked
+  // for. Throws (RateLimitError or a plain Error) so a calling `resolve()`
+  // classifies and surfaces the failure on the metal symbol itself exactly
+  // like any other fetch error.
+  async function resolveEurPerUsd(): Promise<number> {
+    const cached = cache.EURUSD
+    if (cached && cached.fetchedAt === asOf) {
+      if (cached.failed) throw new Error('USD/EUR-Kurs heute bereits fehlgeschlagen.')
+      const rate = cached.series.at(-1)?.close
+      if (rate !== undefined) return rate
+    }
+
+    try {
+      const rate = await fetchUsdEurRate(apiKey)
+      cache.EURUSD = { fetchedAt: asOf, series: [{ date: asOf, close: rate }] }
+      return rate
+    } catch (error) {
+      if (!(error instanceof RateLimitError)) {
+        cache.EURUSD = { fetchedAt: asOf, series: [], failed: true }
+      }
+      throw error
+    }
+  }
+
+  for (const symbol of symbols) {
+    if (isMetalSymbol(symbol)) {
+      await resolve(symbol, async () => {
+        const rate = await resolveEurPerUsd()
+        const points = await fetchMetalWeekly(symbol, apiKey)
+        return points.map((point) => ({ date: point.date, close: point.close * rate }))
+      })
+      continue
+    }
+
+    await resolve(symbol, () => fetchWeekly(symbol, apiKey))
   }
 
   savePriceCache(cache)

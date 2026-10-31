@@ -19,6 +19,18 @@ Limits die zuletzt bekannten Kurse weiter an.
 Symbole folgen Alpha Vantages Notation für Xetra, z. B. `SAP.DEX` oder
 `EUNL.DEX` (iShares Core MSCI World).
 
+## Edelmetalle
+
+Gold und Silber lassen sich wie jede andere Position über das
+Transaktionsformular erfassen („Art des Wertpapiers“ → „Edelmetall“, dann
+Gold oder Silber wählen). Stückzahl ist in **Feinunze (oz)**. Alpha Vantage
+liefert dafür Kurse nur in **USD** (`GOLD_SILVER_HISTORY`); die App rechnet
+mit dem **aktuellen** USD/EUR-Kurs (`CURRENCY_EXCHANGE_RATE`, einmal pro Tag
+abgerufen und für beide Metalle wiederverwendet) in EUR um. Das ist ein
+bewusster Kompromiss: ältere Punkte im Wertentwicklungs-Chart nutzen den
+heutigen statt den historischen Wechselkurs. Andere Edelmetalle (Platin,
+Palladium) bietet Alpha Vantage nicht an.
+
 ## Watchlist
 
 Wertpapiere lassen sich per ISIN oder WKN suchen und auf eine Watchlist

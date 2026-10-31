@@ -211,24 +211,56 @@ export function TransactionForm({
         </div>
 
         <div className="field field--symbol">
-          <label htmlFor={`${formId}-symbol`} className="field-label">
-            Symbol
-          </label>
-          <div className="symbol-row">
-            <input
-              id={`${formId}-symbol`}
-              className="num"
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              placeholder="z. B. SAP.DEX"
-              list={`${formId}-known-symbols`}
-            />
-            <datalist id={`${formId}-known-symbols`}>
-              {Object.keys(instruments).map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-          </div>
+          {kind === 'metal' ? (
+            <>
+              <span className="field-label">Symbol</span>
+              <div className="segmented" role="radiogroup" aria-label="Edelmetall">
+                <button
+                  type="button"
+                  className={symbol === 'XAU' ? 'segmented-option segmented-option--active' : 'segmented-option'}
+                  aria-pressed={symbol === 'XAU'}
+                  onClick={() => {
+                    setSymbol('XAU')
+                    setName('Gold')
+                  }}
+                >
+                  Gold
+                </button>
+                <button
+                  type="button"
+                  className={symbol === 'XAG' ? 'segmented-option segmented-option--active' : 'segmented-option'}
+                  aria-pressed={symbol === 'XAG'}
+                  onClick={() => {
+                    setSymbol('XAG')
+                    setName('Silber')
+                  }}
+                >
+                  Silber
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label htmlFor={`${formId}-symbol`} className="field-label">
+                Symbol
+              </label>
+              <div className="symbol-row">
+                <input
+                  id={`${formId}-symbol`}
+                  className="num"
+                  value={symbol}
+                  onChange={(e) => setSymbol(e.target.value)}
+                  placeholder="z. B. SAP.DEX"
+                  list={`${formId}-known-symbols`}
+                />
+                <datalist id={`${formId}-known-symbols`}>
+                  {Object.keys(instruments).map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="field">
@@ -242,9 +274,28 @@ export function TransactionForm({
           <label htmlFor={`${formId}-kind`} className="field-label">
             Art des Wertpapiers
           </label>
-          <select id={`${formId}-kind`} value={kind} onChange={(e) => setKind(e.target.value as InstrumentKind)}>
+          <select
+            id={`${formId}-kind`}
+            value={kind}
+            onChange={(e) => {
+              const next = e.target.value as InstrumentKind
+              // Symbol/Name are picked from a fixed Gold/Silber control
+              // while kind is 'metal' (see below) — switching into or out
+              // of it should not leave a stale XAU/XAG or free-typed
+              // symbol behind for the other mode.
+              if (next === 'metal') {
+                setSymbol('XAU')
+                setName('Gold')
+              } else if (kind === 'metal') {
+                setSymbol('')
+                setName('')
+              }
+              setKind(next)
+            }}
+          >
             <option value="stock">Aktie</option>
             <option value="etf">ETF</option>
+            <option value="metal">Edelmetall</option>
           </select>
         </div>
 
@@ -263,7 +314,7 @@ export function TransactionForm({
 
         <div className="field">
           <label htmlFor={`${formId}-quantity`} className="field-label">
-            Stück
+            {kind === 'metal' ? 'Feinunze (oz)' : 'Stück'}
           </label>
           <input
             id={`${formId}-quantity`}
@@ -278,7 +329,7 @@ export function TransactionForm({
 
         <div className="field">
           <label htmlFor={`${formId}-price`} className="field-label">
-            Preis pro Stück (€)
+            {kind === 'metal' ? 'Preis pro Feinunze (€)' : 'Preis pro Stück (€)'}
           </label>
           <input
             id={`${formId}-price`}

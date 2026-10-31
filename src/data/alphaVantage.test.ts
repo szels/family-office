@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchWeekly, RateLimitError, searchSymbol, UnknownSymbolError } from './alphaVantage'
+import {
+  fetchMetalWeekly,
+  fetchUsdEurRate,
+  fetchWeekly,
+  RateLimitError,
+  searchSymbol,
+  UnknownSymbolError,
+} from './alphaVantage'
 
 function mockFetchOnce(body: unknown) {
   vi.stubGlobal(
@@ -63,6 +70,85 @@ describe('fetchWeekly', () => {
     mockFetchOnce({})
 
     await expect(fetchWeekly('UNKNOWN', 'demo-key')).rejects.toBeInstanceOf(UnknownSymbolError)
+  })
+})
+
+describe('fetchMetalWeekly', () => {
+  it('parses the gold/silver history into ascending price points', async () => {
+    mockFetchOnce({
+      nominal: 'XAUUSD',
+      data: [
+        { date: '2026-10-30', price: '3998.5892976958' },
+        { date: '2026-10-25', price: '3995.8586920516' },
+      ],
+    })
+
+    const points = await fetchMetalWeekly('XAU', 'demo-key')
+
+    expect(points).toEqual([
+      { date: '2026-10-25', close: 3995.8586920516 },
+      { date: '2026-10-30', close: 3998.5892976958 },
+    ])
+  })
+
+  it('requests GOLD_SILVER_HISTORY with the symbol, weekly interval and key', async () => {
+    mockFetchOnce({ nominal: 'XAUUSD', data: [] })
+
+    await fetchMetalWeekly('XAU', 'demo-key')
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('function=GOLD_SILVER_HISTORY&symbol=XAU&interval=weekly&apikey=demo-key'),
+    )
+  })
+
+  it('throws RateLimitError on a "Note" response', async () => {
+    mockFetchOnce({ Note: 'standard API rate limit is 25 requests per day' })
+
+    await expect(fetchMetalWeekly('XAU', 'demo-key')).rejects.toBeInstanceOf(RateLimitError)
+  })
+
+  it('throws UnknownSymbolError when the data key is simply missing', async () => {
+    mockFetchOnce({})
+
+    await expect(fetchMetalWeekly('XAU', 'demo-key')).rejects.toBeInstanceOf(UnknownSymbolError)
+  })
+})
+
+describe('fetchUsdEurRate', () => {
+  it('parses the exchange rate field', async () => {
+    mockFetchOnce({
+      'Realtime Currency Exchange Rate': {
+        '1. From_Currency Code': 'USD',
+        '3. To_Currency Code': 'EUR',
+        '5. Exchange Rate': '0.89563964',
+      },
+    })
+
+    expect(await fetchUsdEurRate('demo-key')).toBeCloseTo(0.89563964)
+  })
+
+  it('requests CURRENCY_EXCHANGE_RATE with USD/EUR and the key', async () => {
+    mockFetchOnce({ 'Realtime Currency Exchange Rate': { '5. Exchange Rate': '0.9' } })
+
+    await fetchUsdEurRate('demo-key')
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'function=CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=EUR&apikey=demo-key',
+      ),
+    )
+  })
+
+  it('throws RateLimitError on a "Note" response', async () => {
+    mockFetchOnce({ Note: 'standard API rate limit is 25 requests per day' })
+
+    await expect(fetchUsdEurRate('demo-key')).rejects.toBeInstanceOf(RateLimitError)
+  })
+
+  it('throws an error when the rate field is simply missing', async () => {
+    mockFetchOnce({})
+
+    await expect(fetchUsdEurRate('demo-key')).rejects.toThrow()
   })
 })
 

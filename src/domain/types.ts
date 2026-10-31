@@ -15,7 +15,7 @@ export interface Transaction {
   fees: number
 }
 
-export type InstrumentKind = 'stock' | 'etf'
+export type InstrumentKind = 'stock' | 'etf' | 'metal'
 
 export interface Instrument {
   name: string

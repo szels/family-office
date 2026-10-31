@@ -14,6 +14,10 @@ interface AlphaVantageResponse {
   'Error Message'?: string
   'Weekly Time Series'?: Record<string, { '4. close': string }>
   bestMatches?: Array<Record<string, string>>
+  /** GOLD_SILVER_HISTORY. */
+  data?: Array<{ date: string; price: string }>
+  /** CURRENCY_EXCHANGE_RATE. */
+  'Realtime Currency Exchange Rate'?: Record<string, string>
 }
 
 function assertNoApiError(data: AlphaVantageResponse): void {
@@ -44,6 +48,44 @@ export async function fetchWeekly(symbol: string, apiKey: string): Promise<Price
   return Object.entries(series)
     .map(([date, values]) => ({ date, close: Number.parseFloat(values['4. close']) }))
     .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+export const METAL_SYMBOLS = ['XAU', 'XAG'] as const
+export type MetalSymbol = (typeof METAL_SYMBOLS)[number]
+
+export function isMetalSymbol(symbol: string): symbol is MetalSymbol {
+  return (METAL_SYMBOLS as readonly string[]).includes(symbol)
+}
+
+/** Fetches weekly gold ('XAU') or silver ('XAG') prices in USD per troy ounce, ascending by date. */
+export async function fetchMetalWeekly(symbol: MetalSymbol, apiKey: string): Promise<PricePoint[]> {
+  const data = await callApi({ function: 'GOLD_SILVER_HISTORY', symbol, interval: 'weekly', apikey: apiKey })
+  assertNoApiError(data)
+
+  if (!data.data) {
+    throw new UnknownSymbolError(`Keine Kursdaten für Edelmetall "${symbol}" gefunden.`)
+  }
+
+  return data.data
+    .map((point) => ({ date: point.date, close: Number.parseFloat(point.price) }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/** Fetches the current USD→EUR exchange rate (1 USD = x EUR). */
+export async function fetchUsdEurRate(apiKey: string): Promise<number> {
+  const data = await callApi({
+    function: 'CURRENCY_EXCHANGE_RATE',
+    from_currency: 'USD',
+    to_currency: 'EUR',
+    apikey: apiKey,
+  })
+  assertNoApiError(data)
+
+  const rate = data['Realtime Currency Exchange Rate']?.['5. Exchange Rate']
+  if (!rate) {
+    throw new Error('Wechselkurs USD/EUR konnte nicht ermittelt werden.')
+  }
+  return Number.parseFloat(rate)
 }
 
 export interface SymbolMatch {

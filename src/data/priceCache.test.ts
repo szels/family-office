@@ -6,11 +6,13 @@ import type { PricePoint } from '../domain/types'
 
 vi.mock('./alphaVantage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./alphaVantage')>()
-  return { ...actual, fetchWeekly: vi.fn() }
+  return { ...actual, fetchWeekly: vi.fn(), fetchMetalWeekly: vi.fn(), fetchUsdEurRate: vi.fn() }
 })
 
-const { fetchWeekly } = await import('./alphaVantage')
+const { fetchWeekly, fetchMetalWeekly, fetchUsdEurRate } = await import('./alphaVantage')
 const fetchWeeklyMock = vi.mocked(fetchWeekly)
+const fetchMetalWeeklyMock = vi.mocked(fetchMetalWeekly)
+const fetchUsdEurRateMock = vi.mocked(fetchUsdEurRate)
 
 const TODAY = '2026-03-01'
 const freshSeries: PricePoint[] = [{ date: '2026-02-27', close: 123 }]
@@ -18,6 +20,8 @@ const freshSeries: PricePoint[] = [{ date: '2026-02-27', close: 123 }]
 beforeEach(() => {
   localStorage.clear()
   fetchWeeklyMock.mockReset()
+  fetchMetalWeeklyMock.mockReset()
+  fetchUsdEurRateMock.mockReset()
 })
 
 describe('getSeries', () => {
@@ -103,6 +107,120 @@ describe('getSeries', () => {
 
     expect(fetchWeeklyMock).toHaveBeenCalledOnce()
     expect(result.series.BOGUS).toEqual(freshSeries)
+  })
+})
+
+describe('getSeries with precious metals', () => {
+  it('converts a metal series to EUR using the fetched USD/EUR rate', async () => {
+    fetchUsdEurRateMock.mockResolvedValue(0.9)
+    fetchMetalWeeklyMock.mockResolvedValue([{ date: '2026-02-27', close: 4000 }])
+
+    const result = await getSeries(['XAU'], 'demo-key', TODAY)
+
+    expect(result.series.XAU).toEqual([{ date: '2026-02-27', close: 3600 }])
+    expect(fetchUsdEurRateMock).toHaveBeenCalledOnce()
+  })
+
+  it('caches the converted series and the EUR/USD rate separately', async () => {
+    fetchUsdEurRateMock.mockResolvedValue(0.9)
+    fetchMetalWeeklyMock.mockResolvedValue([{ date: '2026-02-27', close: 4000 }])
+
+    await getSeries(['XAU'], 'demo-key', TODAY)
+
+    const cache = loadPriceCache()
+    expect(cache.XAU).toEqual({ fetchedAt: TODAY, series: [{ date: '2026-02-27', close: 3600 }] })
+    expect(cache.EURUSD).toEqual({ fetchedAt: TODAY, series: [{ date: TODAY, close: 0.9 }] })
+  })
+
+  it('reuses one cached EUR/USD rate for both gold and silver, fetching it only once', async () => {
+    fetchUsdEurRateMock.mockResolvedValue(0.9)
+    fetchMetalWeeklyMock.mockResolvedValue([{ date: '2026-02-27', close: 4000 }])
+
+    const result = await getSeries(['XAU', 'XAG'], 'demo-key', TODAY)
+
+    expect(fetchUsdEurRateMock).toHaveBeenCalledOnce()
+    expect(fetchMetalWeeklyMock).toHaveBeenCalledTimes(2)
+    expect(result.series.XAU).toEqual([{ date: '2026-02-27', close: 3600 }])
+    expect(result.series.XAG).toEqual([{ date: '2026-02-27', close: 3600 }])
+  })
+
+  it('reuses an already-cached EUR/USD rate from today without refetching it', async () => {
+    savePriceCache({ EURUSD: { fetchedAt: TODAY, series: [{ date: TODAY, close: 0.8 }] } })
+    fetchMetalWeeklyMock.mockResolvedValue([{ date: '2026-02-27', close: 4000 }])
+
+    const result = await getSeries(['XAU'], 'demo-key', TODAY)
+
+    expect(fetchUsdEurRateMock).not.toHaveBeenCalled()
+    expect(result.series.XAU).toEqual([{ date: '2026-02-27', close: 3200 }])
+  })
+
+  it('does not surface the EUR/USD bookkeeping entry as a symbol in the result', async () => {
+    fetchUsdEurRateMock.mockResolvedValue(0.9)
+    fetchMetalWeeklyMock.mockResolvedValue([{ date: '2026-02-27', close: 4000 }])
+
+    const result = await getSeries(['XAU'], 'demo-key', TODAY)
+
+    expect(result.series.EURUSD).toBeUndefined()
+    expect(result.rateLimited).toEqual([])
+    expect(result.failed).toEqual([])
+  })
+
+  it('marks the metal symbol as rate-limited when the EUR/USD fetch itself is rate-limited', async () => {
+    fetchUsdEurRateMock.mockRejectedValue(new RateLimitError('limit'))
+
+    const result = await getSeries(['XAU'], 'demo-key', TODAY)
+
+    expect(result.rateLimited).toEqual(['XAU'])
+    expect(fetchMetalWeeklyMock).not.toHaveBeenCalled()
+  })
+
+  it('stops fetching a second metal once the EUR/USD rate-limits on the first', async () => {
+    fetchUsdEurRateMock.mockRejectedValue(new RateLimitError('limit'))
+
+    const result = await getSeries(['XAU', 'XAG'], 'demo-key', TODAY)
+
+    expect(result.rateLimited).toEqual(['XAU', 'XAG'])
+    expect(fetchUsdEurRateMock).toHaveBeenCalledOnce()
+    expect(fetchMetalWeeklyMock).not.toHaveBeenCalled()
+  })
+
+  it('a rate-limited EUR/USD fetch also stops a later regular stock in the same call', async () => {
+    fetchUsdEurRateMock.mockRejectedValue(new RateLimitError('limit'))
+
+    const result = await getSeries(['XAU', 'SAP.DEX'], 'demo-key', TODAY)
+
+    expect(result.rateLimited).toEqual(['XAU', 'SAP.DEX'])
+    expect(fetchWeeklyMock).not.toHaveBeenCalled()
+  })
+
+  it('marks the metal as failed (not rate-limited) when the EUR/USD fetch fails for another reason', async () => {
+    fetchUsdEurRateMock.mockRejectedValue(new Error('unexpected shape'))
+
+    const result = await getSeries(['XAU'], 'demo-key', TODAY)
+
+    expect(result.failed).toEqual(['XAU'])
+    expect(result.rateLimited).toEqual([])
+  })
+
+  it('does not retry a same-day failed EUR/USD fetch for a second metal', async () => {
+    fetchUsdEurRateMock.mockRejectedValueOnce(new Error('unexpected shape'))
+    fetchMetalWeeklyMock.mockResolvedValue([{ date: '2026-02-27', close: 4000 }])
+
+    const result = await getSeries(['XAU', 'XAG'], 'demo-key', TODAY)
+
+    expect(fetchUsdEurRateMock).toHaveBeenCalledOnce()
+    expect(result.failed).toEqual(['XAU', 'XAG'])
+    expect(fetchMetalWeeklyMock).not.toHaveBeenCalled()
+  })
+
+  it('marks a metal symbol as failed when its own history fetch fails (not a rate limit)', async () => {
+    fetchUsdEurRateMock.mockResolvedValue(0.9)
+    fetchMetalWeeklyMock.mockRejectedValue(new UnknownSymbolError('nope'))
+
+    const result = await getSeries(['XAU'], 'demo-key', TODAY)
+
+    expect(result.failed).toEqual(['XAU'])
+    expect(loadPriceCache().XAU).toEqual({ fetchedAt: TODAY, series: [], failed: true })
   })
 })
 

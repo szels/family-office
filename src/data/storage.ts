@@ -91,7 +91,10 @@ function isValidTransaction(value: unknown): value is Transaction {
 function isValidInstrument(value: unknown): value is Instrument {
   if (typeof value !== 'object' || value === null) return false
   const instrument = value as Record<string, unknown>
-  return typeof instrument.name === 'string' && (instrument.kind === 'stock' || instrument.kind === 'etf')
+  return (
+    typeof instrument.name === 'string' &&
+    (instrument.kind === 'stock' || instrument.kind === 'etf' || instrument.kind === 'metal')
+  )
 }
 
 function isValidWatchlistEntry(value: unknown): value is WatchlistEntry {

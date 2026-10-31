@@ -178,6 +178,20 @@ describe('export / import', () => {
     expect(() => importData(JSON.stringify({ transactions: [], instruments: [] }))).toThrow()
   })
 
+  it('accepts an instrument with kind "metal"', () => {
+    const withMetal = { ...instruments, 'XAU': { name: 'Gold', kind: 'metal' } }
+    const json = JSON.stringify({ transactions: [], instruments: withMetal })
+
+    importData(json)
+
+    expect(loadInstruments()).toEqual(withMetal)
+  })
+
+  it('rejects an instrument with an unknown kind', () => {
+    const bad = { 'XAU': { name: 'Gold', kind: 'crypto' } }
+    expect(() => importData(JSON.stringify({ transactions: [], instruments: bad }))).toThrow()
+  })
+
   it('rejects internally inconsistent data (a sell with no matching buy) via a dry run', () => {
     const sellOnly = { ...transaction, id: 'tx-sell', type: 'sell' as const }
     expect(() => importData(JSON.stringify({ transactions: [sellOnly], instruments }))).toThrow()

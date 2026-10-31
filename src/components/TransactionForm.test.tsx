@@ -98,6 +98,46 @@ describe('TransactionForm', () => {
     expect(onAdd).not.toHaveBeenCalled()
   })
 
+  describe('Edelmetall', () => {
+    it('shows a Gold/Silber picker instead of the free-text symbol field, defaulting to Gold', () => {
+      renderForm()
+
+      fireEvent.change(screen.getByLabelText('Art des Wertpapiers'), { target: { value: 'metal' } })
+
+      expect(screen.queryByLabelText('Symbol')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Gold' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByLabelText('Name')).toHaveValue('Gold')
+    })
+
+    it('switches to Silber, using the correct symbol and Feinunze labels', () => {
+      const { onAdd } = renderForm()
+      fireEvent.change(screen.getByLabelText('Art des Wertpapiers'), { target: { value: 'metal' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Silber' }))
+
+      expect(screen.getByLabelText('Name')).toHaveValue('Silber')
+      expect(screen.getByLabelText('Feinunze (oz)')).toBeInTheDocument()
+      expect(screen.getByLabelText('Preis pro Feinunze (€)')).toBeInTheDocument()
+
+      fireEvent.change(screen.getByLabelText('Feinunze (oz)'), { target: { value: '2' } })
+      fireEvent.change(screen.getByLabelText('Preis pro Feinunze (€)'), { target: { value: '30' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Kauf erfassen' }))
+
+      expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ symbol: 'XAG', quantity: 2, price: 30 }))
+    })
+
+    it('switching back to Aktie clears the metal symbol/name and restores the free-text field', () => {
+      renderForm()
+      fireEvent.change(screen.getByLabelText('Art des Wertpapiers'), { target: { value: 'metal' } })
+
+      fireEvent.change(screen.getByLabelText('Art des Wertpapiers'), { target: { value: 'stock' } })
+
+      expect(screen.getByLabelText('Symbol')).toHaveValue('')
+      expect(screen.getByLabelText('Name')).toHaveValue('')
+      expect(screen.getByLabelText('Stück')).toBeInTheDocument()
+    })
+  })
+
   describe('editing an existing transaction', () => {
     const existing: Transaction = {
       id: 'tx-1',
