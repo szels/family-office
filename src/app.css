@@ -487,6 +487,38 @@ select:focus-visible {
   background: var(--paper-raised);
 }
 
+.watchlist-results {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 360px;
+}
+
+.watchlist-match-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.watchlist-match-row:last-child {
+  border-bottom: none;
+}
+
+.watchlist-match {
+  flex: 1 1 auto;
+}
+
+.watchlist-match-row .icon-button {
+  flex-shrink: 0;
+}
+
 .form-error {
   color: var(--loss);
   font-size: 0.875rem;

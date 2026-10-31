@@ -8,6 +8,7 @@ import { SettingsDialog } from './components/SettingsDialog'
 import { TickerChart } from './components/TickerChart'
 import { TransactionForm } from './components/TransactionForm'
 import { TransactionList } from './components/TransactionList'
+import { Watchlist } from './components/Watchlist'
 import { buildHistory } from './domain/history'
 import { computePositions } from './domain/portfolio'
 import { computeAnnualizedReturn } from './domain/returns'
@@ -18,7 +19,7 @@ import { formatDate } from './lib/format'
 
 function App() {
   const store = usePortfolioStore()
-  const { transactions, instruments, settings } = store
+  const { transactions, instruments, watchlist, settings } = store
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const formSectionRef = useRef<HTMLElement>(null)
@@ -31,10 +32,28 @@ function App() {
   const symbols = useMemo(() => {
     const set = new Set(transactions.map((tx) => tx.symbol))
     for (const symbol of Object.keys(instruments)) set.add(symbol)
+    for (const entry of watchlist) set.add(entry.symbol)
     return [...set]
-  }, [transactions, instruments])
+  }, [transactions, instruments, watchlist])
 
   const prices = usePrices(symbols, settings.apiKey)
+
+  // Watchlist entries carry their own name/kind but aren't written into
+  // `instruments` (that record means "held", driving the positions table
+  // etc.) — merge them in just for display in the ticker chart's picker,
+  // with an actually-held instrument's own name taking precedence.
+  const displayInstruments = useMemo(() => {
+    const merged = { ...instruments }
+    for (const entry of watchlist) {
+      if (!merged[entry.symbol]) merged[entry.symbol] = { name: entry.name, kind: entry.kind }
+    }
+    return merged
+  }, [instruments, watchlist])
+
+  function removeSymbol(symbol: string) {
+    if (watchlist.some((entry) => entry.symbol === symbol)) store.removeFromWatchlist(symbol)
+    if (instruments[symbol]) store.removeInstrument(symbol)
+  }
 
   const { positions, positionsError } = useMemo(() => {
     try {
@@ -147,13 +166,23 @@ function App() {
       </section>
 
       <section className="app-section">
+        <h2>Watchlist</h2>
+        <Watchlist
+          entries={watchlist}
+          seriesBySymbol={prices.series}
+          onAdd={store.addToWatchlist}
+          onRemove={store.removeFromWatchlist}
+        />
+      </section>
+
+      <section className="app-section">
         <h2>Kursverlauf</h2>
         <TickerChart
           symbols={symbols}
           seriesBySymbol={prices.series}
           transactions={transactions}
-          instruments={instruments}
-          onRemoveSymbol={store.removeInstrument}
+          instruments={displayInstruments}
+          onRemoveSymbol={removeSymbol}
         />
       </section>
 

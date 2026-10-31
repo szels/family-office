@@ -45,6 +45,16 @@ export interface Position {
   realizedGain: number
 }
 
+export interface WatchlistEntry {
+  /** Alpha-Vantage-Symbol, z. B. "EUNL.DEX". */
+  symbol: string
+  name: string
+  isin: string
+  wkn: string
+  kind: InstrumentKind
+  addedAt: IsoDate
+}
+
 export interface HistoryPoint {
   date: IsoDate
   /** Market value of all open positions on this date. */

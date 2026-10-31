@@ -19,6 +19,18 @@ Limits die zuletzt bekannten Kurse weiter an.
 Symbole folgen Alpha Vantages Notation für Xetra, z. B. `SAP.DEX` oder
 `EUNL.DEX` (iShares Core MSCI World).
 
+## Watchlist
+
+Wertpapiere lassen sich per ISIN oder WKN suchen und auf eine Watchlist
+setzen, ohne eine Transaktion zu erfassen. Die Suche läuft über die
+(undokumentierte, aber frei und ohne Key nutzbare) Instrumentensuche von
+[onvista.de](https://www.onvista.de) — Alpha Vantage kann nur nach Name
+oder Ticker suchen, nicht nach ISIN/WKN. Da die API inoffiziell ist, kann
+sie sich ohne Vorankündigung ändern; fällt die Suche aus, zeigt die App
+eine Fehlermeldung statt abzustürzen. Watchlist-Einträge zeigen den
+aktuellen Kurs und die Veränderung seit Aufnahme an und zählen wie
+gehaltene Positionen gegen das 25-Abrufe-Tageslimit von Alpha Vantage.
+
 ## Entwicklung
 
 ```bash

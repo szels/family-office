@@ -1,5 +1,5 @@
 import { computePositions } from '../domain/portfolio'
-import type { Instrument, PriceCache, Settings, Transaction } from '../domain/types'
+import type { Instrument, PriceCache, Settings, Transaction, WatchlistEntry } from '../domain/types'
 
 const PREFIX = 'pf.v1.'
 
@@ -49,9 +49,18 @@ export function savePriceCache(cache: PriceCache): void {
   save('prices', cache)
 }
 
+export function loadWatchlist(): WatchlistEntry[] {
+  return load('watchlist', [])
+}
+
+export function saveWatchlist(watchlist: WatchlistEntry[]): void {
+  save('watchlist', watchlist)
+}
+
 interface ExportedData {
   transactions: Transaction[]
   instruments: Record<string, Instrument>
+  watchlist: WatchlistEntry[]
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -85,11 +94,27 @@ function isValidInstrument(value: unknown): value is Instrument {
   return typeof instrument.name === 'string' && (instrument.kind === 'stock' || instrument.kind === 'etf')
 }
 
-/** Serializes transactions and instruments (not settings or the price cache) as JSON. */
+function isValidWatchlistEntry(value: unknown): value is WatchlistEntry {
+  if (typeof value !== 'object' || value === null) return false
+  const entry = value as Record<string, unknown>
+  return (
+    typeof entry.symbol === 'string' &&
+    entry.symbol !== '' &&
+    typeof entry.name === 'string' &&
+    typeof entry.isin === 'string' &&
+    typeof entry.wkn === 'string' &&
+    (entry.kind === 'stock' || entry.kind === 'etf') &&
+    typeof entry.addedAt === 'string' &&
+    ISO_DATE.test(entry.addedAt)
+  )
+}
+
+/** Serializes transactions, instruments and the watchlist (not settings or the price cache) as JSON. */
 export function exportData(): string {
   const data: ExportedData = {
     transactions: loadTransactions(),
     instruments: loadInstruments(),
+    watchlist: loadWatchlist(),
   }
   return JSON.stringify(data, null, 2)
 }
@@ -125,12 +150,18 @@ export function importData(json: string): void {
   }
 
   const { transactions, instruments } = candidate
+  // Older exports predate the watchlist field — treat a missing one as empty
+  // rather than rejecting the whole import.
+  const watchlist = candidate.watchlist ?? []
 
   if (!transactions.every(isValidTransaction)) {
     throw new Error('Import fehlgeschlagen: eine oder mehrere Transaktionen haben ein ungültiges Format.')
   }
   if (!Object.values(instruments).every(isValidInstrument)) {
     throw new Error('Import fehlgeschlagen: ein oder mehrere Wertpapiere haben ein ungültiges Format.')
+  }
+  if (!Array.isArray(watchlist) || !watchlist.every(isValidWatchlistEntry)) {
+    throw new Error('Import fehlgeschlagen: ein oder mehrere Watchlist-Einträge haben ein ungültiges Format.')
   }
 
   const seenIds = new Set<string>()
@@ -150,4 +181,5 @@ export function importData(json: string): void {
 
   saveTransactions(transactions)
   saveInstruments(instruments)
+  saveWatchlist(watchlist)
 }

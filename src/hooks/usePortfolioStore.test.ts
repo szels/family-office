@@ -1,8 +1,8 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { usePortfolioStore } from './usePortfolioStore'
-import { loadInstruments, loadPriceCache, loadTransactions, savePriceCache } from '../data/storage'
-import type { Transaction } from '../domain/types'
+import { loadInstruments, loadPriceCache, loadTransactions, loadWatchlist, savePriceCache } from '../data/storage'
+import type { Transaction, WatchlistEntry } from '../domain/types'
 
 const buy: Transaction = {
   id: 'tx-1',
@@ -12,6 +12,15 @@ const buy: Transaction = {
   quantity: 10,
   price: 100,
   fees: 0,
+}
+
+const watchlistEntry: WatchlistEntry = {
+  symbol: 'EUNL.DEX',
+  name: 'iShares Core MSCI World UCITS ETF USD Acc.',
+  isin: 'IE00B4L5Y983',
+  wkn: 'A0RPWH',
+  kind: 'etf',
+  addedAt: '2026-02-01',
 }
 
 beforeEach(() => {
@@ -82,6 +91,19 @@ describe('usePortfolioStore', () => {
     expect(loadPriceCache()).toEqual({ 'EUNL.DEX': { fetchedAt: '2026-01-10', series: [] } })
   })
 
+  it('keeps the price cache when removing an instrument whose symbol is still on the watchlist', () => {
+    const { result } = renderHook(() => usePortfolioStore())
+    act(() => {
+      result.current.upsertInstrument('EUNL.DEX', { name: 'iShares Core MSCI World', kind: 'etf' })
+      result.current.addToWatchlist(watchlistEntry)
+    })
+    savePriceCache({ 'EUNL.DEX': { fetchedAt: '2026-02-01', series: [] } })
+
+    act(() => result.current.removeInstrument('EUNL.DEX'))
+
+    expect(loadPriceCache()).toEqual({ 'EUNL.DEX': { fetchedAt: '2026-02-01', series: [] } })
+  })
+
   it('updates the API key in settings', () => {
     const { result } = renderHook(() => usePortfolioStore())
 
@@ -101,5 +123,63 @@ describe('usePortfolioStore', () => {
 
     expect(result.current.transactions).toEqual([buy])
     expect(result.current.instruments).toEqual({ 'SAP.DEX': { name: 'SAP SE', kind: 'stock' } })
+  })
+
+  it('starts with the watchlist already in storage', () => {
+    const { result } = renderHook(() => usePortfolioStore())
+    expect(result.current.watchlist).toEqual([])
+  })
+
+  it('adds an entry to the watchlist and persists it', () => {
+    const { result } = renderHook(() => usePortfolioStore())
+
+    act(() => result.current.addToWatchlist(watchlistEntry))
+
+    expect(result.current.watchlist).toEqual([watchlistEntry])
+    expect(loadWatchlist()).toEqual([watchlistEntry])
+  })
+
+  it('ignores adding a symbol that is already on the watchlist', () => {
+    const { result } = renderHook(() => usePortfolioStore())
+    act(() => result.current.addToWatchlist(watchlistEntry))
+
+    act(() => result.current.addToWatchlist({ ...watchlistEntry, name: 'Different name' }))
+
+    expect(result.current.watchlist).toEqual([watchlistEntry])
+  })
+
+  it('removes a watchlist entry and drops its price cache entry', () => {
+    const { result } = renderHook(() => usePortfolioStore())
+    act(() => result.current.addToWatchlist(watchlistEntry))
+    savePriceCache({ 'EUNL.DEX': { fetchedAt: '2026-02-01', series: [] } })
+
+    act(() => result.current.removeFromWatchlist('EUNL.DEX'))
+
+    expect(result.current.watchlist).toEqual([])
+    expect(loadWatchlist()).toEqual([])
+    expect(loadPriceCache()).toEqual({})
+  })
+
+  it('keeps the price cache when removing a watchlist entry whose symbol is still an instrument', () => {
+    const { result } = renderHook(() => usePortfolioStore())
+    act(() => {
+      result.current.addToWatchlist(watchlistEntry)
+      result.current.upsertInstrument('EUNL.DEX', { name: 'iShares Core MSCI World', kind: 'etf' })
+    })
+    savePriceCache({ 'EUNL.DEX': { fetchedAt: '2026-02-01', series: [] } })
+
+    act(() => result.current.removeFromWatchlist('EUNL.DEX'))
+
+    expect(result.current.watchlist).toEqual([])
+    expect(loadPriceCache()).toEqual({ 'EUNL.DEX': { fetchedAt: '2026-02-01', series: [] } })
+  })
+
+  it('imports the watchlist, replacing state', () => {
+    const { result } = renderHook(() => usePortfolioStore())
+    const json = JSON.stringify({ transactions: [], instruments: {}, watchlist: [watchlistEntry] })
+
+    act(() => result.current.importAll(json))
+
+    expect(result.current.watchlist).toEqual([watchlistEntry])
   })
 })

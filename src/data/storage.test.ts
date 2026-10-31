@@ -6,12 +6,14 @@ import {
   loadPriceCache,
   loadSettings,
   loadTransactions,
+  loadWatchlist,
   saveInstruments,
   savePriceCache,
   saveSettings,
   saveTransactions,
+  saveWatchlist,
 } from './storage'
-import type { Instrument, PriceCache, Settings, Transaction } from '../domain/types'
+import type { Instrument, PriceCache, Settings, Transaction, WatchlistEntry } from '../domain/types'
 
 const transaction: Transaction = {
   id: 'tx-1',
@@ -25,6 +27,15 @@ const transaction: Transaction = {
 
 const instruments: Record<string, Instrument> = {
   'SAP.DEX': { name: 'SAP SE', kind: 'stock' },
+}
+
+const watchlistEntry: WatchlistEntry = {
+  symbol: 'EUNL.DEX',
+  name: 'iShares Core MSCI World UCITS ETF USD Acc.',
+  isin: 'IE00B4L5Y983',
+  wkn: 'A0RPWH',
+  kind: 'etf',
+  addedAt: '2026-02-01',
 }
 
 beforeEach(() => {
@@ -79,25 +90,60 @@ describe('price cache', () => {
   })
 })
 
+describe('watchlist', () => {
+  it('defaults to an empty array', () => {
+    expect(loadWatchlist()).toEqual([])
+  })
+
+  it('round-trips through save/load', () => {
+    saveWatchlist([watchlistEntry])
+    expect(loadWatchlist()).toEqual([watchlistEntry])
+  })
+})
+
 describe('export / import', () => {
-  it('exports transactions and instruments, but not settings or price cache', () => {
+  it('exports transactions, instruments and the watchlist, but not settings or price cache', () => {
     saveTransactions([transaction])
     saveInstruments(instruments)
+    saveWatchlist([watchlistEntry])
     saveSettings({ apiKey: 'secret' })
 
     const json = exportData()
     const parsed = JSON.parse(json)
 
-    expect(parsed).toEqual({ transactions: [transaction], instruments })
+    expect(parsed).toEqual({ transactions: [transaction], instruments, watchlist: [watchlistEntry] })
   })
 
   it('imports previously exported data back into storage', () => {
-    const json = JSON.stringify({ transactions: [transaction], instruments })
+    const json = JSON.stringify({ transactions: [transaction], instruments, watchlist: [watchlistEntry] })
 
     importData(json)
 
     expect(loadTransactions()).toEqual([transaction])
     expect(loadInstruments()).toEqual(instruments)
+    expect(loadWatchlist()).toEqual([watchlistEntry])
+  })
+
+  it('imports older exports that have no watchlist field at all', () => {
+    const json = JSON.stringify({ transactions: [transaction], instruments })
+
+    importData(json)
+
+    expect(loadTransactions()).toEqual([transaction])
+    expect(loadWatchlist()).toEqual([])
+  })
+
+  it('rejects a watchlist entry with an invalid kind', () => {
+    const bad = { ...watchlistEntry, kind: 'bond' }
+    expect(() =>
+      importData(JSON.stringify({ transactions: [], instruments: {}, watchlist: [bad] })),
+    ).toThrow()
+  })
+
+  it('rejects a watchlist given as an array of non-objects', () => {
+    expect(() =>
+      importData(JSON.stringify({ transactions: [], instruments: {}, watchlist: ['EUNL.DEX'] })),
+    ).toThrow()
   })
 
   it('rejects malformed JSON', () => {
