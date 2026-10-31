@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { usePortfolioStore } from './usePortfolioStore'
-import { loadInstruments, loadTransactions } from '../data/storage'
+import { loadInstruments, loadPriceCache, loadTransactions, savePriceCache } from '../data/storage'
 import type { Transaction } from '../domain/types'
 
 const buy: Transaction = {
@@ -62,6 +62,24 @@ describe('usePortfolioStore', () => {
 
     expect(result.current.instruments).toEqual({ 'SAP.DEX': { name: 'SAP SE', kind: 'stock' } })
     expect(loadInstruments()).toEqual({ 'SAP.DEX': { name: 'SAP SE', kind: 'stock' } })
+  })
+
+  it('removes an instrument, leaves others untouched, and drops its price cache entry', () => {
+    const { result } = renderHook(() => usePortfolioStore())
+    act(() => {
+      result.current.upsertInstrument('SAP.DEX', { name: 'SAP SE', kind: 'stock' })
+      result.current.upsertInstrument('EUNL.DEX', { name: 'iShares Core MSCI World', kind: 'etf' })
+    })
+    savePriceCache({
+      'SAP.DEX': { fetchedAt: '2026-01-10', series: [] },
+      'EUNL.DEX': { fetchedAt: '2026-01-10', series: [] },
+    })
+
+    act(() => result.current.removeInstrument('SAP.DEX'))
+
+    expect(result.current.instruments).toEqual({ 'EUNL.DEX': { name: 'iShares Core MSCI World', kind: 'etf' } })
+    expect(loadInstruments()).toEqual({ 'EUNL.DEX': { name: 'iShares Core MSCI World', kind: 'etf' } })
+    expect(loadPriceCache()).toEqual({ 'EUNL.DEX': { fetchedAt: '2026-01-10', series: [] } })
   })
 
   it('updates the API key in settings', () => {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RateLimitError, UnknownSymbolError } from './alphaVantage'
-import { getSeries } from './priceCache'
+import { forgetCachedSeries, getSeries } from './priceCache'
 import { loadPriceCache, savePriceCache } from './storage'
 import type { PricePoint } from '../domain/types'
 
@@ -103,5 +103,26 @@ describe('getSeries', () => {
 
     expect(fetchWeeklyMock).toHaveBeenCalledOnce()
     expect(result.series.BOGUS).toEqual(freshSeries)
+  })
+})
+
+describe('forgetCachedSeries', () => {
+  it('removes only the given symbol from the cache', () => {
+    savePriceCache({
+      'SAP.DEX': { fetchedAt: TODAY, series: freshSeries },
+      'EUNL.DEX': { fetchedAt: TODAY, series: freshSeries },
+    })
+
+    forgetCachedSeries('SAP.DEX')
+
+    expect(loadPriceCache()).toEqual({ 'EUNL.DEX': { fetchedAt: TODAY, series: freshSeries } })
+  })
+
+  it('does nothing when the symbol is not cached', () => {
+    savePriceCache({ 'EUNL.DEX': { fetchedAt: TODAY, series: freshSeries } })
+
+    forgetCachedSeries('SAP.DEX')
+
+    expect(loadPriceCache()).toEqual({ 'EUNL.DEX': { fetchedAt: TODAY, series: freshSeries } })
   })
 })

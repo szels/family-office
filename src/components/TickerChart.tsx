@@ -65,9 +65,10 @@ interface TickerChartProps {
   seriesBySymbol: Record<string, PricePoint[]>
   transactions: Transaction[]
   instruments: Record<string, Instrument>
+  onRemoveSymbol: (symbol: string) => void
 }
 
-export function TickerChart({ symbols, seriesBySymbol, transactions, instruments }: TickerChartProps) {
+export function TickerChart({ symbols, seriesBySymbol, transactions, instruments, onRemoveSymbol }: TickerChartProps) {
   const [selected, setSelected] = useState(symbols[0] ?? '')
   const [range, setRange] = useState<ChartRange>(RANGES[3])
   // A symbol can disappear (last position in it sold off) between renders;
@@ -82,24 +83,37 @@ export function TickerChart({ symbols, seriesBySymbol, transactions, instruments
   // Range filter runs after merging, so fill-forward of the close price still sees the
   // full series and buy/sell markers outside the window drop out automatically.
   const data = filterByRange(buildChartData(seriesBySymbol[effectiveSelected] ?? [], symbolTransactions), range)
+  const hasTransactions = symbolTransactions.length > 0
 
   return (
     <div className="ticker-chart">
-      <label className="ticker-select-label">
-        Symbol
-        <select
-          value={effectiveSelected}
-          onChange={(event) => setSelected(event.target.value)}
-          className="ticker-select"
+      <div className="ticker-select-row">
+        <label className="ticker-select-label">
+          Symbol
+          <select
+            value={effectiveSelected}
+            onChange={(event) => setSelected(event.target.value)}
+            className="ticker-select"
+          >
+            {symbols.map((symbol) => (
+              <option key={symbol} value={symbol}>
+                {symbol}
+                {instruments[symbol]?.name ? ` – ${instruments[symbol].name}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="icon-button"
+          disabled={hasTransactions}
+          title={hasTransactions ? 'Symbol hat noch Transaktionen – erst diese löschen.' : undefined}
+          aria-label={`Symbol ${effectiveSelected} entfernen`}
+          onClick={() => onRemoveSymbol(effectiveSelected)}
         >
-          {symbols.map((symbol) => (
-            <option key={symbol} value={symbol}>
-              {symbol}
-              {instruments[symbol]?.name ? ` – ${instruments[symbol].name}` : ''}
-            </option>
-          ))}
-        </select>
-      </label>
+          Entfernen
+        </button>
+      </div>
       <ChartRangeSelector value={range} onChange={setRange} />
       <ResponsiveContainer width="100%" height={240}>
         <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>

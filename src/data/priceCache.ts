@@ -66,3 +66,10 @@ export async function getSeries(
   savePriceCache(cache)
   return { series, rateLimited, failed }
 }
+
+/** Drops a symbol's cached series/failure marker, e.g. after removing its instrument. */
+export function forgetCachedSeries(symbol: string): void {
+  const cache = loadPriceCache()
+  delete cache[symbol]
+  savePriceCache(cache)
+}

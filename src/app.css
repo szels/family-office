@@ -199,6 +199,16 @@ table th[scope='col']:first-child {
   border-color: var(--brass);
 }
 
+.icon-button:disabled {
+  color: var(--ink-muted);
+  border-color: var(--rule);
+  cursor: not-allowed;
+}
+
+.icon-button:disabled:hover {
+  border-color: var(--rule);
+}
+
 /* ---------- Donut ---------- */
 
 .donut {
@@ -340,13 +350,20 @@ table th[scope='col']:first-child {
   background: var(--loss);
 }
 
+.ticker-select-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .ticker-select-label {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 0.875rem;
   color: var(--ink-muted);
-  margin-bottom: 8px;
 }
 
 .ticker-select {

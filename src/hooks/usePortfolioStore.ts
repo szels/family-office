@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { forgetCachedSeries } from '../data/priceCache'
 import {
   exportData,
   importData,
@@ -41,6 +42,14 @@ export function usePortfolioStore() {
     setInstruments((prev) => ({ ...prev, [symbol]: instrument }))
   }, [])
 
+  const removeInstrument = useCallback((symbol: string) => {
+    setInstruments((prev) => {
+      const { [symbol]: _removed, ...rest } = prev
+      return rest
+    })
+    forgetCachedSeries(symbol)
+  }, [])
+
   const updateApiKey = useCallback((apiKey: string) => {
     setSettings((prev) => ({ ...prev, apiKey }))
   }, [])
@@ -59,6 +68,7 @@ export function usePortfolioStore() {
     removeTransaction,
     updateTransaction,
     upsertInstrument,
+    removeInstrument,
     updateApiKey,
     importAll,
     exportAll: exportData,

@@ -153,6 +153,7 @@ function App() {
           seriesBySymbol={prices.series}
           transactions={transactions}
           instruments={instruments}
+          onRemoveSymbol={store.removeInstrument}
         />
       </section>
 
