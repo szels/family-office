@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RateLimitError, UnknownSymbolError } from './alphaVantage'
-import { forgetCachedSeries, getSeries } from './priceCache'
+import { forgetCachedSeries, getSeries, orderByStaleness } from './priceCache'
 import { loadPriceCache, savePriceCache } from './storage'
 import type { PricePoint } from '../domain/types'
 
@@ -22,6 +22,24 @@ beforeEach(() => {
   fetchWeeklyMock.mockReset()
   fetchMetalWeeklyMock.mockReset()
   fetchUsdEurRateMock.mockReset()
+})
+
+describe('orderByStaleness', () => {
+  it('puts never-loaded symbols first, then oldest fetchedAt first', () => {
+    const cache = {
+      NEW: { fetchedAt: '2026-02-28', series: [] },
+      OLD: { fetchedAt: '2026-02-01', series: [] },
+    }
+
+    expect(orderByStaleness(['NEW', 'OLD', 'NEVER'], cache)).toEqual(['NEVER', 'OLD', 'NEW'])
+  })
+
+  it('keeps the input order for ties and does not mutate the input', () => {
+    const symbols = ['B', 'C', 'A']
+
+    expect(orderByStaleness(symbols, {})).toEqual(['B', 'C', 'A'])
+    expect(symbols).toEqual(['B', 'C', 'A'])
+  })
 })
 
 describe('getSeries', () => {
@@ -67,6 +85,22 @@ describe('getSeries', () => {
     expect(result.rateLimited).toEqual(['SAP.DEX', 'EUNL.DEX'])
     expect(result.series['EUNL.DEX']).toEqual([{ date: '2026-02-13', close: 50 }])
     expect(result.series['SAP.DEX']).toBeUndefined()
+  })
+
+  it('spends a limited quota on the stalest symbol first, not the alphabetically first', async () => {
+    savePriceCache({
+      AAA: { fetchedAt: '2026-02-28', series: [{ date: '2026-02-27', close: 1 }] },
+      ZZZ: { fetchedAt: '2026-02-20', series: [{ date: '2026-02-13', close: 2 }] },
+    })
+    fetchWeeklyMock
+      .mockResolvedValueOnce(freshSeries)
+      .mockRejectedValueOnce(new RateLimitError('limit'))
+
+    const result = await getSeries(['AAA', 'ZZZ'], 'demo-key', TODAY)
+
+    expect(result.series.ZZZ).toEqual(freshSeries)
+    expect(result.rateLimited).toEqual(['AAA'])
+    expect(result.series.AAA).toEqual([{ date: '2026-02-27', close: 1 }])
   })
 
   it('records a failed symbol but keeps fetching the rest', async () => {
