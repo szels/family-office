@@ -1,6 +1,6 @@
 import { fetchMetalWeekly, fetchUsdEurRate, fetchWeekly, isMetalSymbol, RateLimitError } from './alphaVantage'
 import { loadPriceCache, savePriceCache } from './storage'
-import type { IsoDate, PricePoint } from '../domain/types'
+import type { IsoDate, PriceCache, PricePoint } from '../domain/types'
 import { todayIso } from '../lib/date'
 
 export interface PriceCacheResult {
@@ -12,10 +12,25 @@ export interface PriceCacheResult {
 }
 
 /**
+ * Orders `symbols` so the stalest ones are fetched first: symbols with no
+ * cache entry, then ascending by `fetchedAt`. Ties keep the input order.
+ *
+ * With a daily quota smaller than the symbol count, a fixed order would
+ * spend the quota on the same leading symbols every day and starve the rest.
+ */
+export function orderByStaleness(symbols: string[], cache: PriceCache): string[] {
+  // Never-loaded symbols have no entry; '' sorts before every ISO date.
+  // Array#sort is stable, so ties keep the input order.
+  return symbols.slice().sort((a, b) => (cache[a]?.fetchedAt ?? '').localeCompare(cache[b]?.fetchedAt ?? ''))
+}
+
+/**
  * Returns weekly price series for `symbols`, fetching only what isn't
  * already cached for `asOf` (defaults to today). Alpha Vantage's free tier
  * allows 25 requests/day, so once a rate limit is hit, remaining symbols
- * are served from cache (if any) instead of making further calls.
+ * are served from cache (if any) instead of making further calls. Symbols
+ * are processed oldest-cache-first (see `orderByStaleness`), so the daily
+ * quota rotates through all symbols over successive runs.
  *
  * Gold/silver (`isMetalSymbol`) come from a separate Alpha Vantage endpoint
  * priced in USD/troy ounce; they're converted to EUR here (via a cached
@@ -98,7 +113,7 @@ export async function getSeries(
     }
   }
 
-  for (const symbol of symbols) {
+  for (const symbol of orderByStaleness(symbols, cache)) {
     if (isMetalSymbol(symbol)) {
       await resolve(symbol, async () => {
         const rate = await resolveEurPerUsd()
