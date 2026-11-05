@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { normalizeIdentifier, searchSecurity } from './onvista'
+import { fetchDailyHistory, lookupIsin, normalizeIdentifier, searchSecurity } from './onvista'
 
 function mockFetchOnce(body: unknown) {
   vi.stubGlobal(
@@ -102,5 +102,60 @@ describe('searchSecurity', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve({}) }))
 
     await expect(searchSecurity('716460')).rejects.toThrow('Suche fehlgeschlagen')
+  })
+})
+
+describe('fetchDailyHistory', () => {
+  // 1_772_150_400 = 2026-02-27T00:00Z, 1_772_064_000 = 2026-02-26T00:00Z
+  const body = { datetimeLast: [1_772_150_400, 1_772_064_000], last: [123, 120], isoCurrency: 'EUR' }
+
+  it('zips timestamps and closes into ascending price points', async () => {
+    mockFetchOnce(body)
+
+    expect(await fetchDailyHistory('DE0007164600', 'stock', '2025-03-01')).toEqual([
+      { date: '2026-02-26', close: 120 },
+      { date: '2026-02-27', close: 123 },
+    ])
+  })
+
+  it('requests STOCK or FUND by kind, with the whole span from the start date', async () => {
+    mockFetchOnce(body)
+    await fetchDailyHistory('IE00B4L5Y983', 'etf', '2025-03-01')
+
+    const url = String(vi.mocked(fetch).mock.calls[0][0])
+    expect(url).toContain('/instruments/FUND/ISIN:IE00B4L5Y983/eod_history')
+    expect(url).toContain('range=MAX')
+    expect(url).toContain('startDate=2025-03-01')
+  })
+
+  it('throws on a non-OK response so the caller can fall back', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 429 }))
+
+    await expect(fetchDailyHistory('DE0007164600', 'stock', '2025-03-01')).rejects.toThrow(/429/)
+  })
+
+  it('throws when onvista returns no prices', async () => {
+    mockFetchOnce({ datetimeLast: [], last: [] })
+
+    await expect(fetchDailyHistory('DE0007164600', 'stock', '2025-03-01')).rejects.toThrow(/keine Kurse/)
+  })
+})
+
+describe('lookupIsin', () => {
+  it('returns the ISIN of the exact symbol match and ignores look-alikes', async () => {
+    mockFetchOnce({
+      list: [
+        { entityType: 'STOCK', name: 'SAP ADR', isin: 'US8030542042', wkn: '884437', symbol: 'SAPG' },
+        { entityType: 'STOCK', name: 'SAP SE', isin: 'DE0007164600', wkn: '716460', symbol: 'SAP' },
+      ],
+    })
+
+    expect(await lookupIsin('SAP.DEX')).toBe('DE0007164600')
+  })
+
+  it('returns null when nothing matches exactly', async () => {
+    mockFetchOnce({ list: [] })
+
+    expect(await lookupIsin('SAP.DEX')).toBeNull()
   })
 })

@@ -66,6 +66,25 @@ describe('buildHistory', () => {
     ])
   })
 
+  it('values each symbol at its own latest close when daily and weekly series are mixed', () => {
+    const points = buildHistory(
+      [buy({ date: '2026-01-01', quantity: 10, price: 100 }), buy({ id: 'tx-2', symbol: 'GOLD', date: '2026-01-01', quantity: 1, price: 50 })],
+      {
+        'SAP.DEX': series([['2026-01-05', 101], ['2026-01-06', 102], ['2026-01-07', 103]]), // daily
+        GOLD: series([['2026-01-02', 60], ['2026-01-09', 70]]), // weekly fallback
+      },
+      '2026-01-09',
+    )
+
+    expect(points.map((p) => [p.date, p.value])).toEqual([
+      ['2026-01-02', 10 * 100 + 60], // SAP has no close yet -> average cost
+      ['2026-01-05', 10 * 101 + 60],
+      ['2026-01-06', 10 * 102 + 60],
+      ['2026-01-07', 10 * 103 + 60],
+      ['2026-01-09', 10 * 103 + 70], // SAP forward-filled from its last daily close
+    ])
+  })
+
   it('does not duplicate today when it already matches the last price point', () => {
     const points = buildHistory(
       [buy({ date: '2026-01-01', quantity: 10, price: 100 })],

@@ -44,7 +44,7 @@ export function SettingsDialog({ apiKey, onUpdateApiKey, onExport, onImport }: S
     <div className="settings-panel">
       <div className="field">
         <label htmlFor={`${formId}-apikey`} className="field-label">
-          Alpha Vantage API-Key
+          Alpha Vantage API-Key (optional)
         </label>
         <div className="symbol-row">
           <input
@@ -60,7 +60,8 @@ export function SettingsDialog({ apiKey, onUpdateApiKey, onExport, onImport }: S
         </div>
         <p className="field-hint">
           Wird nur lokal in diesem Browser gespeichert und nie exportiert. Für Kursabfragen wird er an
-          Alpha&nbsp;Vantage übertragen, sonst an niemanden.
+          Alpha&nbsp;Vantage übertragen, sonst an niemanden. Onvista, Frankfurter (EZB-Kurse) und gold-api.com
+          erhalten nur Symbol bzw. ISIN, keine Bestände.
         </p>
       </div>
 

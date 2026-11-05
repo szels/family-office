@@ -10,26 +10,46 @@ Design und Entscheidungen im Detail:
 
 ## Kurse
 
-Kursdaten kommen von [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
-(kostenloser API-Key). Der Key wird unter „Einstellungen“ eingetragen und
-bleibt lokal im Browser. Die kostenlose Stufe erlaubt 25 Anfragen pro Tag;
-die App cacht Kurse deshalb pro Tag und Symbol und zeigt bei Erreichen des
-Limits die zuletzt bekannten Kurse weiter an.
+Aktien und ETFs laden **ohne API-Key** als **Tages-Schlusskurse in EUR** von
+[onvista.de](https://www.onvista.de) (Xetra). Das ist eine undokumentierte,
+aber frei und mit CORS nutzbare Schnittstelle ohne festes Tageslimit. Die App
+holt den Verlauf ab einem Jahr vor dem ersten Kauf bzw. der Aufnahme in die
+Watchlist und cacht ihn pro Tag und Symbol im Browser.
+
+Als **Ersatzquelle** dient [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
+(kostenloser API-Key unter „Einstellungen“, optional): Wenn onvista ein
+Symbol nicht kennt oder nicht antwortet, holt die App stattdessen die
+Wochen-Schlusskurse dort. Die kostenlose Stufe erlaubt 25 Anfragen pro Tag.
+Ist das Limit erreicht, zeigt die App für diese Symbole die zuletzt
+bekannten Kurse; die Symbole mit dem ältesten Cache kommen zuerst dran. Ohne
+Key und bei einem onvista-Ausfall bleiben die zuletzt bekannten Kurse
+sichtbar, und die App versucht es beim nächsten Laden erneut. Wann der
+Ersatz greift, legt `shouldFallBackToAlphaVantage` in
+`src/data/priceCache.ts` fest.
 
 Symbole folgen Alpha Vantages Notation für Xetra, z. B. `SAP.DEX` oder
-`EUNL.DEX` (iShares Core MSCI World).
+`EUNL.DEX` (iShares Core MSCI World). Die zugehörige ISIN ermittelt die App
+über die onvista-Suche und merkt sie sich.
 
 ## Edelmetalle
 
 Gold und Silber lassen sich wie jede andere Position über das
 Transaktionsformular erfassen („Art des Wertpapiers“ → „Edelmetall“, dann
-Gold oder Silber wählen). Stückzahl ist in **Feinunze (oz)**. Alpha Vantage
-liefert dafür Kurse nur in **USD** (`GOLD_SILVER_HISTORY`); die App rechnet
-mit dem **aktuellen** USD/EUR-Kurs (`CURRENCY_EXCHANGE_RATE`, einmal pro Tag
-abgerufen und für beide Metalle wiederverwendet) in EUR um. Das ist ein
-bewusster Kompromiss: ältere Punkte im Wertentwicklungs-Chart nutzen den
-heutigen statt den historischen Wechselkurs. Andere Edelmetalle (Platin,
-Palladium) bietet Alpha Vantage nicht an.
+Gold oder Silber wählen). Stückzahl ist in **Feinunze (oz)**. Die Preise
+setzen sich aus drei Quellen zusammen:
+
+- **Verlauf** (Wochenkurse in USD): Alpha Vantage (`GOLD_SILVER_HISTORY`),
+  dafür braucht es den API-Key.
+- **Aktueller Preis:** Spotpreis von [gold-api.com](https://gold-api.com),
+  ohne Key. Er ist der Punkt für „heute“. Ohne Alpha-Vantage-Key zeigt die
+  App nur diesen einen Punkt.
+- **Umrechnung in EUR:** Jeder Punkt wird mit dem EZB-Referenzkurs seines
+  Tages umgerechnet, abgerufen über [Frankfurter](https://frankfurter.dev)
+  (ohne Key, einmal pro Tag für beide Metalle). Der Verlauf nutzt also den
+  historischen Wechselkurs, nicht den heutigen.
+
+Platin und Palladium sind nicht angebunden: gold-api.com liefert dafür nur
+den aktuellen Preis, keinen Verlauf.
 
 ## Watchlist
 
@@ -41,7 +61,7 @@ oder Ticker suchen, nicht nach ISIN/WKN. Da die API inoffiziell ist, kann
 sie sich ohne Vorankündigung ändern; fällt die Suche aus, zeigt die App
 eine Fehlermeldung statt abzustürzen. Watchlist-Einträge zeigen den
 aktuellen Kurs und die Veränderung seit Aufnahme an und zählen wie
-gehaltene Positionen gegen das 25-Abrufe-Tageslimit von Alpha Vantage.
+gehaltene Positionen über denselben Kurs-Cache.
 
 ## Entwicklung
 

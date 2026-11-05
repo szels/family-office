@@ -2,20 +2,26 @@ import { todayIso } from '../lib/date'
 import { computePositions } from './portfolio'
 import type { HistoryPoint, IsoDate, PricePoint, Transaction } from './types'
 
-/** Last close at or before `date`, falling back when no price point qualifies yet. */
+/**
+ * Last close at or before `date`, falling back when no price point qualifies yet.
+ * `series` is ascending by date, so this is a binary search: with daily data
+ * it runs once per timeline date and held symbol.
+ */
 function priceOnOrBefore(series: PricePoint[], date: IsoDate, fallback: number): number {
-  let result = fallback
-  for (const point of series) {
-    if (point.date > date) break
-    result = point.close
+  let low = 0
+  let high = series.length // first index whose date is after `date`
+  while (low < high) {
+    const mid = (low + high) >> 1
+    if (series[mid].date > date) high = mid
+    else low = mid + 1
   }
-  return result
+  return low === 0 ? fallback : series[low - 1].close
 }
 
 /**
  * Builds a time series of portfolio value vs. invested capital.
  *
- * The timeline is the union of all weekly price-series dates (across every
+ * The timeline is the union of all price-series dates (daily; weekly for fallback sources) (across every
  * symbol ever held) from the first transaction onward, plus `asOf` itself
  * so the chart always ends "today". Before a symbol has any price point,
  * its holding is valued at its own average cost (no gain/loss shown yet).

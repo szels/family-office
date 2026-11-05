@@ -72,6 +72,8 @@ export interface PriceCacheEntry {
   fetchedAt: IsoDate
   /** Ascending by date. */
   series: PricePoint[]
+  /** Earliest date the series was asked to cover; a refetch is needed if a caller now wants earlier data. */
+  from?: IsoDate
   /**
    * Set when the fetch on `fetchedAt` failed for a reason other than the
    * rate limit (e.g. an unknown symbol) — skip it for the rest of that day

@@ -49,6 +49,15 @@ export function savePriceCache(cache: PriceCache): void {
   save('prices', cache)
 }
 
+/** Symbol → ISIN, for symbols whose ISIN was resolved through onvista's search. */
+export function loadIsinCache(): Record<string, string> {
+  return load('isins', {})
+}
+
+export function saveIsinCache(isins: Record<string, string>): void {
+  save('isins', isins)
+}
+
 export function loadWatchlist(): WatchlistEntry[] {
   return load('watchlist', [])
 }

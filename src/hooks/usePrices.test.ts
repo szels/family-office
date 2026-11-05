@@ -8,7 +8,7 @@ const { getSeries } = await import('../data/priceCache')
 const getSeriesMock = vi.mocked(getSeries)
 
 function result(overrides: Partial<PriceCacheResult> = {}): PriceCacheResult {
-  return { series: {}, rateLimited: [], failed: [], ...overrides }
+  return { series: {}, rateLimited: [], failed: [], unavailable: [], ...overrides }
 }
 
 beforeEach(() => {
@@ -16,11 +16,36 @@ beforeEach(() => {
 })
 
 describe('usePrices', () => {
-  it('stays idle and never calls getSeries without an API key', async () => {
+  it('loads without an API key, since stocks and ETFs come from a keyless source', async () => {
+    getSeriesMock.mockResolvedValue(result({ series: { 'SAP.DEX': [{ date: '2026-02-27', close: 123 }] } }))
+
     const { result: hook } = renderHook(() => usePrices(['SAP.DEX'], undefined))
+
+    await waitFor(() => expect(hook.current.status).toBe('ready'))
+    expect(getSeriesMock).toHaveBeenCalledWith(['SAP.DEX'], undefined, undefined, {})
+  })
+
+  it('stays idle without symbols', () => {
+    const { result: hook } = renderHook(() => usePrices([], 'demo-key'))
 
     expect(hook.current.status).toBe('idle')
     expect(getSeriesMock).not.toHaveBeenCalled()
+  })
+
+  it('passes hints through and does not refetch for an equal hints object', async () => {
+    getSeriesMock.mockResolvedValue(result())
+
+    const { rerender } = renderHook(({ hints }) => usePrices(['SAP.DEX'], undefined, hints), {
+      initialProps: { hints: { 'SAP.DEX': { kind: 'stock' as const, since: '2025-01-01' } } },
+    })
+    await waitFor(() => expect(getSeriesMock).toHaveBeenCalledTimes(1))
+    expect(getSeriesMock).toHaveBeenCalledWith(['SAP.DEX'], undefined, undefined, {
+      'SAP.DEX': { kind: 'stock', since: '2025-01-01' },
+    })
+
+    rerender({ hints: { 'SAP.DEX': { kind: 'stock' as const, since: '2025-01-01' } } })
+
+    expect(getSeriesMock).toHaveBeenCalledTimes(1)
   })
 
   it('fetches series for the given symbols and derives the latest close per symbol', async () => {
@@ -41,14 +66,15 @@ describe('usePrices', () => {
     expect(hook.current.latestPrices).toEqual({ 'SAP.DEX': 123 })
   })
 
-  it('passes through rateLimited and failed symbols', async () => {
-    getSeriesMock.mockResolvedValue(result({ rateLimited: ['SAP.DEX'], failed: ['BOGUS'] }))
+  it('passes through rateLimited, failed and unavailable symbols', async () => {
+    getSeriesMock.mockResolvedValue(result({ rateLimited: ['SAP.DEX'], failed: ['BOGUS'], unavailable: ['XAU'] }))
 
     const { result: hook } = renderHook(() => usePrices(['SAP.DEX', 'BOGUS'], 'demo-key'))
 
     await waitFor(() => expect(hook.current.status).toBe('ready'))
     expect(hook.current.rateLimited).toEqual(['SAP.DEX'])
     expect(hook.current.failed).toEqual(['BOGUS'])
+    expect(hook.current.unavailable).toEqual(['XAU'])
   })
 
   it('sets an error status when getSeries rejects unexpectedly', async () => {

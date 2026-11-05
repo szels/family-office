@@ -15,6 +15,7 @@ import { computeAnnualizedReturn } from './domain/returns'
 import type { HistoryPoint, Position, Transaction } from './domain/types'
 import { useHashPage, type Page } from './hooks/useHashPage'
 import { usePortfolioStore } from './hooks/usePortfolioStore'
+import type { SymbolHint } from './data/priceCache'
 import { usePrices } from './hooks/usePrices'
 import { formatDate } from './lib/format'
 
@@ -47,7 +48,27 @@ function App() {
     return [...set]
   }, [transactions, instruments, watchlist])
 
-  const prices = usePrices(symbols, settings.apiKey)
+  // Per symbol: what kind it is, its ISIN (watchlist only) and since when it
+  // matters, so prices are loaded from a sensible start date.
+  const hints = useMemo(() => {
+    const result: Record<string, SymbolHint> = {}
+    const earlier = (a: string | undefined, b: string) => (a === undefined || b < a ? b : a)
+    for (const [symbol, instrument] of Object.entries(instruments)) result[symbol] = { kind: instrument.kind }
+    for (const entry of watchlist) {
+      result[entry.symbol] = {
+        kind: entry.kind,
+        isin: entry.isin,
+        since: earlier(result[entry.symbol]?.since, entry.addedAt),
+      }
+    }
+    for (const tx of transactions) {
+      const hint = (result[tx.symbol] ??= { kind: instruments[tx.symbol]?.kind ?? 'stock' })
+      hint.since = earlier(hint.since, tx.date)
+    }
+    return result
+  }, [transactions, instruments, watchlist])
+
+  const prices = usePrices(symbols, settings.apiKey, hints)
 
   // Watchlist entries carry their own name/kind but aren't written into
   // `instruments` (that record means "held", driving the positions table
@@ -144,7 +165,7 @@ function App() {
 
       {!settings.apiKey && (
         <p className="banner banner--info">
-          Hinterlege einen kostenlosen Alpha&nbsp;Vantage API-Key unter „Einstellungen“, um aktuelle Kurse zu laden.
+          Aktien und ETFs laden ohne Key. Ein kostenloser Alpha&nbsp;Vantage API-Key unter „Einstellungen“ ergänzt den Verlauf von Edelmetallen und dient als Ersatzquelle.
         </p>
       )}
       {dataError && (
@@ -156,6 +177,11 @@ function App() {
       {prices.rateLimited.length > 0 && (
         <p className="banner banner--info">
           Tageslimit der Kurs-API erreicht — zeige zuletzt bekannte Kurse für: {prices.rateLimited.join(', ')}.
+        </p>
+      )}
+      {prices.unavailable.length > 0 && (
+        <p className="banner banner--info">
+          Kursquelle gerade nicht erreichbar — zeige zuletzt bekannte Kurse für: {prices.unavailable.join(', ')}.
         </p>
       )}
       {prices.failed.length > 0 && (
