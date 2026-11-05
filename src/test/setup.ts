@@ -11,3 +11,6 @@ if (dom) {
   globalThis.localStorage = dom.window.localStorage
   globalThis.sessionStorage = dom.window.sessionStorage
 }
+
+// jsdom does not implement scrolling; App scrolls to top on page changes.
+window.scrollTo = () => {}

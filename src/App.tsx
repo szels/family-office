@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './app.css'
 import { AllocationDonut } from './components/AllocationDonut'
 import { HistoryChart } from './components/HistoryChart'
@@ -13,11 +13,22 @@ import { buildHistory } from './domain/history'
 import { computePositions } from './domain/portfolio'
 import { computeAnnualizedReturn } from './domain/returns'
 import type { HistoryPoint, Position, Transaction } from './domain/types'
+import { useHashPage, type Page } from './hooks/useHashPage'
 import { usePortfolioStore } from './hooks/usePortfolioStore'
 import { usePrices } from './hooks/usePrices'
 import { formatDate } from './lib/format'
 
+const PAGE_LABELS: Record<Page, string> = {
+  uebersicht: 'Übersicht',
+  markt: 'Markt',
+  transaktionen: 'Transaktionen',
+}
+
 function App() {
+  const [page] = useHashPage()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [page])
   const store = usePortfolioStore()
   const { transactions, instruments, watchlist, settings } = store
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -112,6 +123,14 @@ function App() {
         </button>
       </header>
 
+      <nav className="page-nav" aria-label="Seiten">
+        {(Object.keys(PAGE_LABELS) as Page[]).map((key) => (
+          <a key={key} href={`#/${key}`} aria-current={key === page ? 'page' : undefined}>
+            {PAGE_LABELS[key]}
+          </a>
+        ))}
+      </nav>
+
       {settingsOpen && (
         <section className="app-section">
           <SettingsDialog
@@ -130,8 +149,8 @@ function App() {
       )}
       {dataError && (
         <p className="banner banner--error">
-          Datenfehler in den Transaktionen: {dataError} Bitte die betroffene Transaktion unten in der Liste
-          korrigieren oder löschen.
+          Datenfehler in den Transaktionen: {dataError} Bitte die betroffene Transaktion auf der Seite{' '}
+          <a href="#/transaktionen">Transaktionen</a> korrigieren oder löschen.
         </p>
       )}
       {prices.rateLimited.length > 0 && (
@@ -145,6 +164,8 @@ function App() {
         </p>
       )}
 
+      {page === 'uebersicht' && (
+        <>
       <section className="app-section">
         <KpiRow value={totalValue} invested={totalInvested} annualizedReturn={annualizedReturn} since={since} />
       </section>
@@ -164,7 +185,11 @@ function App() {
           <PositionsTable positions={positions} instruments={instruments} />
         </div>
       </section>
+        </>
+      )}
 
+      {page === 'markt' && (
+        <>
       <section className="app-section">
         <h2>Watchlist</h2>
         <Watchlist
@@ -185,7 +210,11 @@ function App() {
           onRemoveSymbol={removeSymbol}
         />
       </section>
+        </>
+      )}
 
+      {page === 'transaktionen' && (
+        <>
       <section className="app-section" ref={formSectionRef}>
         <h2>{editingTransaction ? 'Transaktion bearbeiten' : 'Transaktion erfassen'}</h2>
         <TransactionForm
@@ -210,6 +239,8 @@ function App() {
           editingId={editingTransaction?.id}
         />
       </section>
+        </>
+      )}
     </div>
   )
 }

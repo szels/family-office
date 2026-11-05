@@ -26,6 +26,29 @@
   font-size: 0.875rem;
 }
 
+/* ---------- Page navigation ---------- */
+
+.page-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: -8px 0 8px;
+}
+
+.page-nav a {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+  text-decoration: none;
+}
+
+.page-nav a[aria-current='page'] {
+  border-color: var(--brass);
+  color: var(--brass);
+}
+
 /* ---------- Sections ---------- */
 
 .app-section {

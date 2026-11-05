@@ -1,10 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { saveTransactions } from './data/storage'
 
 beforeEach(() => {
   localStorage.clear()
+  window.location.hash = ''
 })
 
 // React logs an "Uncaught [RangeError]" dev-mode console.error for the
@@ -33,6 +34,19 @@ describe('App', () => {
     render(<App />)
 
     expect(screen.getByRole('heading', { name: 'Mein Depot' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Transaktionen' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Wertentwicklung' })).toBeInTheDocument()
+  })
+
+  it('switches pages via the navigation', () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('link', { name: 'Markt' }))
+    act(() => {
+      window.location.hash = '#/markt'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+
+    expect(screen.getByRole('heading', { name: 'Watchlist' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Wertentwicklung' })).not.toBeInTheDocument()
   })
 })
